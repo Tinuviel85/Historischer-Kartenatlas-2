@@ -5,7 +5,7 @@
   var KEY = "historischer-atlas-v2-library";
   function el(id) { return document.getElementById(id); }
   function safeHttp(value) {
-    try { var u = new URL(String(value || "").trim()); return (u.protocol === "https:" || u.protocol === "http:") ? u.href : ""; }
+    try { var original = String(value || "").trim(); var u = new URL(original); return (u.protocol === "https:" || u.protocol === "http:") ? original : ""; }
     catch (_) { return ""; }
   }
   function loadStore() {
