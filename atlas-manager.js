@@ -252,43 +252,59 @@
     }
     el("managerDiscoverForm").addEventListener("submit", async function (ev) {
       ev.preventDefault();
-      var query = el("managerDiscoverQuery").value.trim();
-      var out = el("managerResults"), status = el("managerSearchStatus");
-      if (query.length < 2) return;
-      out.replaceChildren(); status.textContent = "Suche georeferenzierte Karten bei MapWarper …";
-      try {
-        var endpoint = "https://mapwarper.net/api/v1/maps.json?show_warped=1&per_page=35&query=" + encodeURIComponent(query);
-        var response = await fetch(endpoint,{headers:{"Accept":"application/json"}});
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        var data = await response.json(), rows = Array.isArray(data.data) ? data.data : [];
-        var count = 0;
-        rows.forEach(function (record) {
-          var a = record.attributes || {}, link = record.links || {};
-          var url = safeHttp(link.tiles);
-          if (!url || !["{z}","{x}","{y}"].every(function (v) {return url.includes(v);})) return;
-          var name = String(a.title || "Historische Karte"), yearMatch = String(a.date_depicted || a.issue_year || name).match(/(?:1[0-9]{3}|20[0-9]{2})/);
-          var year = yearMatch ? Number(yearMatch[0]) : "";
-          var item = {name:name,year:year,region:query,sourceUrl:url,detailUrl:"https://mapwarper.net/maps/" + encodeURIComponent(record.id),provider:"MapWarper",type:"xyz"};
-          var found = maps.some(function (m) {return m && !m.hidden && m.sourceUrl.replace(/^http:/,"https:")===url.replace(/^http:/,"https:");});
-          var row = node("div","manager-result"), box = node("div");
-          box.append(node("strong","",name),node("small","", (year ? year+" · " : "")+"MapWarper · georeferenziert"));
-          var btn = node("button","manager-action"+(found ? "" : " manager-primary"),found ? "Vorhanden" : "+ Übernehmen");
-          btn.disabled=found;btn.type="button";
-          btn.addEventListener("click",async function () {
-            btn.disabled=true;btn.textContent="Übernahme …";
-            try {
-              await ensureRegion(query);
-              item.sourceUrl = item.sourceUrl.replace(/^http:/,"https:");
-              var added=upsert(item,null);
-              btn.textContent="Übernommen";
-              api.setNotice("„"+added.name+"“ zur Kartenbibliothek hinzugefügt.");
-            } catch(e) { btn.disabled=false;btn.textContent="+ Übernehmen";api.setNotice(e.message,6500); window.alert(e.message); }
-          });
-          row.append(box,btn);out.appendChild(row);count++;
+      var query=el("managerDiscoverQuery").value.trim();
+      var out=el("managerResults"), status=el("managerSearchStatus");
+      if (query.length<2) return;
+      out.replaceChildren();
+      var count=0, remote=0, listed=new Set();
+      function appendSuggestion(item) {
+        var url=safeHttp(item.sourceUrl).replace(/^http:/,"https:");
+        if (!url || listed.has(url)) return;
+        listed.add(url); item.sourceUrl=url;
+        var found=maps.some(function(m) {return m&&!m.hidden&&String(m.sourceUrl).replace(/^http:/,"https:")===url;});
+        var row=node("div","manager-result"), box=node("div");
+        box.append(node("strong","",item.name),node("small","",(item.year?item.year+" · ":"")+item.provider+" · Kartenkacheln"));
+        var btn=node("button","manager-action"+(found?"":" manager-primary"),found?"Vorhanden":"+ Übernehmen");
+        btn.disabled=found;btn.type="button";
+        btn.addEventListener("click",async function () {
+          btn.disabled=true;btn.textContent="Übernahme …";
+          try {
+            await ensureRegion(item.region);
+            var added=upsert(item,null);
+            btn.textContent="Übernommen";
+            api.setNotice("„"+added.name+"“ hinzugefügt. Quelle und Nutzungsrechte beachten.");
+          } catch(e) {btn.disabled=false;btn.textContent="+ Übernehmen";api.setNotice(e.message,6500);window.alert(e.message);}
         });
-        status.textContent=count ? count+" georeferenzierte Kartentreffer (erste Ergebnisseite).":"Keine übernehmbaren XYZ-Karten gefunden.";
-      } catch (e) {
-        status.textContent="Automatische Suche fehlgeschlagen ("+e.message+"). Die API könnte vom Browser durch CORS blockiert sein. Verwende vorläufig „Karte hinzufügen“ oder öffne MapWarper direkt.";
+        row.append(box,btn);out.appendChild(row);count++;
+      }
+      var local=query.toLowerCase();
+      if (/berlin|brandenburg|potsdam/.test(local)) {
+        appendSuggestion({name:"Schmettausches Kartenwerk 1767–1787",year:1787,region:query,sourceUrl:"https://tiles.historic.place/region/Schmettau-1787/{z}/{x}/{y}.png",detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",provider:"Historic.Place",type:"xyz"});
+        appendSuggestion({name:"Straubes Übersichtsplan Berlin 1910",year:1910,region:query,sourceUrl:"https://tiles.codefor.de/berlin-straubeplan/{z}/{x}/{y}.png",detailUrl:"https://daten.berlin.de/",provider:"Code for Germany / Geoportal Berlin",type:"xyz"});
+        appendSuggestion({name:"Berlin 1860",year:1860,region:query,sourceUrl:"https://tiles.historic.place/Berlin1860/{z}/{x}/{y}.png",detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",provider:"Historic.Place",type:"xyz"});
+      }
+      if (/deutschland|germany|eisenbahn/.test(local)) {
+        appendSuggestion({name:"Deutschland Eisenbahnkarte 1856",year:1856,region:query,sourceUrl:"https://tiles.historic.place/region/Reisekarte_Deutschland_1856/{z}/{x}/{y}.png",detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",provider:"Historic.Place",type:"xyz"});
+      }
+      status.textContent=count?count+" Karten im integrierten Katalog. Zusätzliche MapWarper-Treffer werden gesucht …":"Suche georeferenzierte MapWarper-Karten …";
+      try {
+        var endpoint="https://mapwarper.net/api/v1/maps.json?show_warped=1&per_page=35&query="+encodeURIComponent(query);
+        var response=await fetch(endpoint,{headers:{"Accept":"application/json"}});
+        if (!response.ok) throw new Error("HTTP "+response.status);
+        var data=await response.json(), rows=Array.isArray(data.data)?data.data:[];
+        rows.forEach(function(record) {
+          var a=record.attributes||{}, links=record.links||{};
+          var url=safeHttp(links.tiles);
+          if (!url||!["{z}","{x}","{y}"].every(function(v){return url.includes(v);})) return;
+          var name=String(a.title||"Historische Karte").slice(0,220);
+          var match=String(a.date_depicted||a.issue_year||name).match(/(?:1[0-9]{3}|20[0-9]{2})/);
+          appendSuggestion({name:name,year:match?Number(match[0]):null,region:query,sourceUrl:url,detailUrl:"https://mapwarper.net/maps/"+encodeURIComponent(record.id),provider:"MapWarper",type:"xyz"});
+          remote++;
+        });
+        status.textContent=count+" Kartenangebote insgesamt; "+remote+" MapWarper-Einträge ausgewertet (erste Ergebnisseite).";
+        if (!count) status.textContent="Keine übernehmbaren XYZ-Karten gefunden. Probiere einen anderen Suchbegriff.";
+      } catch(e) {
+        status.textContent=(count?count+" Karten aus dem integrierten Katalog verfügbar. ":"")+"Live-Suche bei MapWarper aktuell nicht möglich ("+e.message+"). Die Karten können weiterhin manuell hinzugefügt werden.";
       }
     });
     el("mgrExport").addEventListener("click",function () {
