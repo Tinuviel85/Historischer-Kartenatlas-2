@@ -340,6 +340,7 @@
     <p>Grundkarte: © OpenStreetMap-Mitwirkende. Historische Karten: jeweilige Anbieter und Originalquellen; Lizenzen und Urheberrechte sind dort einzusehen.</p>
     <button id="closeDialog" class="btn btn-primary" type="button">Schließen</button>
   </dialog>
+  <script src="atlas-manager.js"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -482,7 +483,7 @@
       const mapGroup=m=>normalRegion(m.region);
       function filteredMaps(){
         const query=$('mapSearch').value.trim().toLocaleLowerCase('de');
-        return maps.filter(m=>{
+        return maps.filter(m=>!m.hidden).filter(m=>{
           const matchedRegion=regionFilter==='Alle'||(regionFilter==='Favoriten'?favorites.has(m.id):regionFilter==='Weitere'?m.region==='Unbekannt':regionFilter==='Berlin'?mapGroup(m)==='Berlin':m.region===regionFilter);
           return matchedRegion&&(!query||`${m.name} ${m.year||''} ${m.region} ${m.provider}`.toLocaleLowerCase('de').includes(query));
         });
@@ -496,7 +497,7 @@
         }
       }
       function renderList(){
-        const values=filteredMaps();$('mapCount').textContent=`${values.length} von ${maps.length}`;
+        const values=filteredMaps();$('mapCount').textContent=`${values.length} von ${maps.filter(m=>!m.hidden).length}`;
         const wrap=$('mapList');wrap.replaceChildren();
         if(!values.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Keine passende Karte gefunden. Suche oder Filter ändern.';wrap.appendChild(empty);return;}
         const frag=document.createDocumentFragment();
@@ -509,8 +510,9 @@
           main.append(strong,sm);
           const star=document.createElement('button');star.type='button';star.className='star';star.textContent=favorites.has(m.id)?'★':'☆';star.title=favorites.has(m.id)?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen';star.setAttribute('aria-label',star.title);star.setAttribute('aria-pressed',String(favorites.has(m.id)));
           star.addEventListener('click',event=>{event.stopPropagation();toggleFavorite(m.id);});
-          row.append(ico,main,star);
-          row.addEventListener('click',event=>{if(event.target.closest('.star'))return;selectMap(m.id);closeMobile();});
+          const edit=document.createElement('button');edit.type='button';edit.className='manager-edit';edit.textContent='✎';edit.title='Karte bearbeiten oder entfernen';edit.setAttribute('aria-label','Karte bearbeiten: '+m.name);edit.addEventListener('click',event=>{event.stopPropagation();window.atlasManager?.editMap(m.id);});
+          row.append(ico,main,edit,star);
+          row.addEventListener('click',event=>{if(event.target.closest('.star,.manager-edit'))return;selectMap(m.id);closeMobile();});
           row.addEventListener('keydown',event=>{if(event.target!==row)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();selectMap(m.id);closeMobile();}});
           frag.appendChild(row);
         }
@@ -596,17 +598,17 @@
         const cfg=regionDefinitions[m.region], zoom=Math.min(cfg.zoom,12);
         const ll=L.latLng(cfg.center);
         const point=map.project(ll,zoom).divideBy(256).floor();
-        const previewUrl=m.sourceUrl.replace('{z}',zoom).replace('{x}',point.x).replace('{y}',point.y);
+        const previewUrl=m.type==='wms' ? '' : m.sourceUrl.replace('{z}',zoom).replace('{x}',point.x).replace('{y}',point.y);
         const img=$('mapPreview');img.hidden=true;$('previewFallback').hidden=false;
         img.onerror=()=>{img.hidden=true;$('previewFallback').hidden=false;};
         img.onload=()=>{img.hidden=false;$('previewFallback').hidden=true;};
-        img.src=previewUrl;
+        if(previewUrl)img.src=previewUrl;else img.removeAttribute('src');
       }
       function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
       function updateTimeline(){
         if(!active)return;
         const group=mapGroup(active);
-        const timeline=maps.filter(m=>mapGroup(m)===group&&m.year!==null).sort((a,b)=>a.year-b.year||a.id-b.id);
+        const timeline=maps.filter(m=>!m.hidden&&mapGroup(m)===group&&m.year!==null).sort((a,b)=>a.year-b.year||a.id-b.id);
         const pos=timeline.findIndex(m=>m.id===active.id);
         $('timelineYear').textContent=active.year?String(active.year):(active.name.toLowerCase().includes('antik')?'Antike':active.displayName);
         $('timelineText').textContent=`${group} · ${pos>=0?`${pos+1} von ${timeline.length} datierten Karten`:`${timeline.length} datierte Karten verfügbar`}`;
@@ -616,17 +618,17 @@
         $('nextYear').onclick=()=>{if(pos>=0&&pos<timeline.length-1)selectMap(timeline[pos+1].id);};
       }
       function selectMap(id,{restoreView=false}={}){
-        const m=maps[id];if(!m)return;
+        const m=maps[id];if(!m||m.hidden)return;
         const previous=active;
         dismissNotice();
         if(layer){historicalMap.removeLayer(layer);layer=null;}
         active=m;
         focusMap(m,previous,restoreView);
         syncHistorical();
-        layer=L.tileLayer(m.sourceUrl,{
-          minZoom:2,maxZoom:19,tms:false,
-          attribution:'',keepBuffer:3,updateWhenIdle:true
-        }).addTo(historicalMap);
+        layer=(m.type==='wms'
+          ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
+          : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true})
+        ).addTo(historicalMap);
         applyPane();
         $('sourceAttributionLink').href=m.detailUrl;
         $('sourceAttributionLink').textContent=m.provider.replace(' (alte Adresse)','');
@@ -827,7 +829,7 @@
       function restoreFromHash(){
         const p=new URLSearchParams(location.hash.replace(/^#/,''));
         const id=p.has('karte')?Number(p.get('karte')):0;
-        const validId=Number.isInteger(id)&&id>=0&&id<maps.length?id:0;
+        const validId=Number.isInteger(id)&&id>=0&&id<maps.length&&!maps[id].hidden?id:(maps.find(m=>m&&!m.hidden)?.id??0);
         const lat=Number(p.get('lat')),lon=Number(p.get('lon')),zoom=Number(p.get('zoom'));
         const validView=p.has('lat')&&p.has('lon')&&p.has('zoom')&&Number.isFinite(lat)&&Number.isFinite(lon)&&Number.isFinite(zoom)&&Math.abs(lat)<=90&&Math.abs(lon)<=180&&zoom>=2&&zoom<=19;
         if(validView)map.setView([lat,lon],zoom,{animate:false});
@@ -836,6 +838,7 @@
         selectMap(validId,{restoreView:validView});
         setMode(p.get('modus')==='compare'?'compare':'overlay');
       }
+      window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
       renderRegions();
       restoreFromHash();
       // Bei Browserzurück/-vor wird der geteilte Kartenausschnitt erneut hergestellt.
