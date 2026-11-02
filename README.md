@@ -56,3 +56,19 @@ Die öffentliche MapWarper-API wird über `https://mapwarper.net/api/v1/maps.jso
 - Bleibt die Änderung nach Neuladen erhalten?
 - Öffnet „Karten entdecken“ den Berliner Katalog; meldet es verständlich, wenn MapWarper nicht erreichbar ist?
 - Funktionieren Vergleichsregler, GPS und „Neu zentrieren“ unverändert?
+
+## Benutzerkonten und Cloud-Synchronisierung (Implementierung vorhanden, Einrichtung nötig)
+
+**Wichtig:** Die Benutzeroberfläche und die Supabase-Integration sind bereits im Code, aber ohne konfiguriertes Supabase-Projekt noch nicht aktiv. Im unkonfigurierten Zustand funktioniert die App unverändert **lokal ohne Anmeldung**.
+
+1. Unter https://supabase.com/dashboard ein eigenes Projekt erstellen (nach Möglichkeit Region Frankfurt).
+2. Unter **SQL Editor** den Inhalt von `supabase/enable-sync.sql` ausführen. Dadurch entsteht die private Tabelle `atlas_user_libraries` mit Row Level Security.
+3. Unter **Authentication → Providers → Email** E-Mail-/Magic-Link-Anmeldung aktivieren.
+4. Unter **Authentication → URL Configuration** als **Site URL** und als erlaubte **Redirect URL** `https://tinuviel85.github.io/Historischer-Kartenatlas-2/` eintragen.
+5. Die **Project URL** (`https://<projekt>.supabase.co`) und den **Publishable Key** (`sb_publishable_...`, alternativ Legacy-Anon-Key) unter **Project Settings / Connect** finden.
+6. Beide Werte in der Datei `atlas-config.js` im Repository hinterlegen. **Nie einen Secret Key, service_role-Key oder das Datenbankpasswort dort eintragen.**
+7. GitHub Pages aktualisieren, dann auf **„☁ Anmelden“** klicken, die E-Mail-Adresse eingeben und den Anmeldelink aufrufen. Die bisherige lokale Bibliothek kann beim ersten Login übernommen werden.
+
+**So arbeitet die Synchronisierung:** Der Gastmodus speichert weiterhin unter dem bisherigen Browser-Schlüssel. Angemeldete Nutzer erhalten eine getrennte lokale Kopie sowie eine private Cloud-Bibliothek. Beim Öffnen auf einem anderen Gerät wird der gespeicherte Zustand nach Anmeldung geladen. Kartenänderungen und Favoriten werden gespeichert und zur Cloud übertragen. Bei Verbindungsfehlern verbleibt eine lokale Kopie; parallele Änderungen auf mehreren Geräten verwenden derzeit die zuletzt erfolgreich geschriebene Version (noch kein Echtzeit-Abgleich/Versionskonfliktmanagement). Die Cloud-Daten werden nur durch Anmeldung geschützt; Gastkarten bleiben weiterhin gerätegebunden.
+
+**Zusätzliche Kartenquelle:** Unter **Karten entdecken** kann eine Georeference Annotation aus https://viewer.allmaps.org/ eingegeben werden. Allmaps wandelt sie über `https://allmaps.xyz/{z}/{x}/{y}.png?url=...` in Leaflet-kompatible XYZ-Kacheln um. Dazu muss die Karte bereits georeferenziert sein; reine IIIF-Bilder reichen nicht aus. Nicht jede Kartenquelle erlaubt Weiterverwendung.
