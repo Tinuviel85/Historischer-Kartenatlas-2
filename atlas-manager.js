@@ -250,6 +250,29 @@
         row.append(title,edit);wrap.appendChild(row);
       });
     }
+    // Allmaps Tile Server converts existing IIIF georeference annotations to XYZ tiles.
+    const allmapsForm=document.createElement("form");
+    allmapsForm.id="atlasAllmapsImport";
+    allmapsForm.style.cssText="border-top:1px solid #dce6dd;padding-top:15px;margin-top:15px";
+    allmapsForm.innerHTML='<label class="manager-label" for="atlasAllmapsURL">Allmaps: georeferenzierte IIIF-Karte übernehmen</label><input id="atlasAllmapsURL" class="manager-search" type="url" required placeholder="https://annotations.allmaps.org/maps/…"><div class="manager-fields" style="margin-top:8px"><label>Kartenname<input id="atlasAllmapsName" required placeholder="Historische Karte"></label><label>Region<input id="atlasAllmapsRegion" required value="Berlin"></label></div><div class="manager-actions"><button class="manager-action manager-primary" type="submit">Allmaps-Karte übernehmen</button><a class="manager-action" href="https://viewer.allmaps.org/" target="_blank" rel="noopener noreferrer">Allmaps-Karten ansehen ↗</a></div><p class="manager-muted">Füge die URL einer bereits georeferenzierten Allmaps-Annotation ein. Eine bloße IIIF-Bild-URL ohne Georeferenzierung reicht nicht. XYZ-Tiles werden automatisch erzeugt.</p><p class="manager-status" id="atlasAllmapsStatus" role="status"></p>';
+    el("managerDiscover").appendChild(allmapsForm);
+    allmapsForm.addEventListener("submit",async function(e){
+      e.preventDefault();
+      const raw=el("atlasAllmapsURL").value.trim();
+      const region=el("atlasAllmapsRegion").value.trim();
+      const name=el("atlasAllmapsName").value.trim();
+      const status=el("atlasAllmapsStatus");
+      const uri=safeHttp(raw);
+      if(!uri||!uri.startsWith("https:")){status.textContent="Die Annotations-URL muss mit https:// beginnen.";return;}
+      status.textContent="Region ermitteln und Karte hinzufügen …";
+      try {
+        await ensureRegion(region);
+        const tiles="https://allmaps.xyz/{z}/{x}/{y}.png?url="+encodeURIComponent(uri);
+        const result=upsert({name:name,region:region,provider:"Allmaps / IIIF",type:"xyz",sourceUrl:tiles,detailUrl:uri},null);
+        status.textContent="Karte „"+result.name+"“ hinzugefügt.";
+        api.setNotice("Allmaps-Karte hinzugefügt. Kartenausschnitt und Quellrechte prüfen.");
+      }catch(e){status.textContent=e.message;}
+    });
     el("managerDiscoverForm").addEventListener("submit", async function (ev) {
       ev.preventDefault();
       var query=el("managerDiscoverQuery").value.trim();
