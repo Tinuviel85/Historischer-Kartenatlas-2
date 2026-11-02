@@ -2,7 +2,7 @@
    Diese Version speichert Änderungen lokal im Browser. Keine Anmeldung/Synchronisation. */
 (function () {
   "use strict";
-  var KEY = "historischer-atlas-v2-library";
+  var KEY = window.AtlasManagerStoreKey || "historischer-atlas-v2-library";
   function el(id) { return document.getElementById(id); }
   function safeHttp(value) {
     try { var original = String(value || "").trim(); var u = new URL(original); return (u.protocol === "https:" || u.protocol === "http:") ? original : ""; }
@@ -83,7 +83,7 @@
         overrides: overrides,
         hidden: maps.filter(function (m) {return m.hidden;}).map(function (m) {return m.id;})
       };
-      try { localStorage.setItem(KEY, JSON.stringify(obj)); return true; }
+      try { obj.favorites=JSON.parse(localStorage.getItem("historischer-atlas-favoriten")||"[]"); localStorage.setItem(KEY, JSON.stringify(obj)); if(window.AtlasCloud?.isAuthenticated())void window.AtlasCloud.saveLibrary(obj); return true; }
       catch (_) { api.setNotice("Speichern nicht möglich. Bitte Browserspeicher prüfen."); return false; }
     }
     function redraw() { api.renderRegions(); api.renderList(); api.updateTimeline(); }
