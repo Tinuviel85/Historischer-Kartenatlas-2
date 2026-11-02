@@ -18,6 +18,7 @@ function readJSON(key) {
   try {return JSON.parse(localStorage.getItem(key)||"null");}catch(_){return null;}
 }
 function keyFor(uid) {return "historischer-atlas-v2-user-"+uid;}
+function dirtyKey(uid) {return keyFor(uid)+"-unsynced";}
 function meaningful(s) {
   return validState(s) && (s.custom.length>0||s.regions.length>0||
     (s.hidden&&s.hidden.length>0)||(s.overrides&&Object.keys(s.overrides).length>0)||
@@ -82,6 +83,7 @@ async function loadLibrary() {
   const personalKey=keyFor(user.id);
   window.AtlasManagerStoreKey=personalKey;
   const cached=readJSON(personalKey), guest=readJSON(GUEST_KEY);
+  const unsynced=readJSON(dirtyKey(user.id));
   if(localStorage.getItem(GUEST_FAV_KEY)===null) localStorage.setItem(GUEST_FAV_KEY,localStorage.getItem(FAVORITES_KEY)||"[]");
   let cloud=null, readFailed=false;
   try {
@@ -92,11 +94,21 @@ async function loadLibrary() {
     readFailed=true;lastError="Cloud-Abfrage fehlgeschlagen: "+(e.message||e)+". Lokale Kopie bleibt erhalten.";
   }
   if(cloud) {
+    if(validState(unsynced)) {
+      if(confirm("Auf diesem Gerät gibt es noch nicht synchronisierte Kartenänderungen. Möchtest du diese in deiner Online-Bibliothek speichern? (Abbrechen lädt die Online-Version.)")) {
+        localStorage.setItem(personalKey,JSON.stringify(unsynced));
+        localStorage.setItem(FAVORITES_KEY,JSON.stringify(unsynced.favorites||[]));
+        await saveLibrary(unsynced);
+        return;
+      }
+      localStorage.setItem(personalKey+"-recovery",JSON.stringify(unsynced));
+      localStorage.removeItem(dirtyKey(user.id));
+    }
     // Server data is canonical on login. Do not mingle private accounts' browser caches.
     localStorage.setItem(personalKey,JSON.stringify(cloud));
     localStorage.setItem(FAVORITES_KEY,JSON.stringify(Array.isArray(cloud.favorites)?cloud.favorites:[]));
   } else if(!readFailed) {
-    let initial=validState(cached)?cached:null;
+    let initial=validState(unsynced)?unsynced:validState(cached)?cached:null;
     if(!initial && meaningful(guest) && confirm("Deine bisherige lokale Kartenbibliothek in dein neues Online-Konto übernehmen?")) {
       initial=Object.assign({},guest,{favorites:readJSON(FAVORITES_KEY)||[]});
     }
@@ -139,6 +151,7 @@ async function init() {
 async function saveLibrary(state) {
   if(!client||!user||!validState(state))return false;
   pending=JSON.parse(JSON.stringify(state));
+  try{localStorage.setItem(dirtyKey(user.id),JSON.stringify(state));}catch(_){/* browser may lack storage */}
   if(sending)return true;
   sending=true;
   while(pending) {
@@ -148,6 +161,7 @@ async function saveLibrary(state) {
         owner_id:user.id,library:value,updated_at:new Date().toISOString()
       },{onConflict:"owner_id"});
       if(error)throw error;
+      if(!pending)localStorage.removeItem(dirtyKey(user.id));
       lastError="";
     }catch(e) {
       lastError="Cloud-Speicherung fehlgeschlagen. Die lokale Kopie bleibt erhalten: "+(e.message||e);
