@@ -340,6 +340,8 @@
     <p>Grundkarte: © OpenStreetMap-Mitwirkende. Historische Karten: jeweilige Anbieter und Originalquellen; Lizenzen und Urheberrechte sind dort einzusehen.</p>
     <button id="closeDialog" class="btn btn-primary" type="button">Schließen</button>
   </dialog>
+  <script src="atlas-config.js"></script>
+  <script src="atlas-cloud.js"></script>
   <script src="atlas-manager.js"></script>
   <script>
     'use strict';
@@ -380,6 +382,7 @@
     window.addEventListener('DOMContentLoaded', async () => {
       const $ = id => document.getElementById(id);
       const stage = document.querySelector('.stage');
+      if (window.AtlasCloud) await window.AtlasCloud.init();
       if (!await loadLeaflet()) {
         const local = /^(?:file:|edge:)/i.test(location.protocol);
         $('toast').textContent = local
@@ -520,7 +523,7 @@
       }
       function toggleFavorite(id){
         if(favorites.has(id))favorites.delete(id);else favorites.add(id);
-        try {localStorage.setItem('historischer-atlas-favoriten',JSON.stringify([...favorites]));}
+        try {localStorage.setItem('historischer-atlas-favoriten',JSON.stringify([...favorites])); if(window.AtlasCloud?.isAuthenticated())window.AtlasCloud.syncFavorites([...favorites]);}
         catch (_){setNotice('Favoriten konnten in diesem Browser nicht gespeichert werden.');}
         renderList();
       }
