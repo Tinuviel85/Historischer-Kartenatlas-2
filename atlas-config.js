@@ -1,6 +1,6 @@
-/* Public client configuration. Only paste a Supabase Project URL and PUBLISHABLE key here.
-   Never use service_role, secret keys or database passwords in browser code. */
+/* Supabase public client configuration. Publishable keys are designed for client-side use.
+   NEVER put a service_role, secret key, or database password here. */
 window.ATLAS_SUPABASE_CONFIG = {
-  url: "",
-  publishableKey: ""
+  url: "https://fokogrmttwfglihocdro.supabase.co",
+  publishableKey: "sb_publishable_vr49XVQAs9Le_3VibxBCfg_vlyjozU9"
 };
