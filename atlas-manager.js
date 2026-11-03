@@ -24,6 +24,10 @@
     return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
   }
   function mount(api) {
+    // Resolve the browser storage namespace only AFTER AtlasCloud.init() has
+    // loaded the current authenticated user and their private Cloud library.
+    // At script evaluation time the account is not known yet.
+    KEY = window.AtlasManagerStoreKey || "historischer-atlas-v2-library";
     var maps = api.maps, defs = api.regionDefinitions, regions = api.definedRegions;
     var defaultCount = maps.length;
     var defaults = maps.map(function (m) { return Object.assign({}, m); });
