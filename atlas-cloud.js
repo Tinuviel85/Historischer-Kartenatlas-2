@@ -33,8 +33,9 @@ function renderState() {
     "Angemeldet als "+(user.email||"Benutzer")+" · Änderungen werden mit deiner Online-Bibliothek synchronisiert.":
     configured?"Ohne Anmeldung bleibt deine Kartenbibliothek ausschließlich in diesem Browser gespeichert.":
       "Lokaler Modus aktiv. Für geräteübergreifende Anmeldung fehlt noch die Supabase-Konfiguration.";
-  const form=id("atlasLoginForm"), logout=id("atlasLogout");
+  const form=id("atlasLoginForm"), logout=id("atlasLogout"), google=id("atlasGoogleLogin");
   if(form)form.hidden=!!user||!configured;
+  if(google)google.hidden=!!user||!configured;
   if(logout)logout.hidden=!user;
   const status=id("atlasAuthStatus");
   if(status)status.textContent=lastError;
@@ -43,17 +44,39 @@ function attachUI() {
   if(account)return;
   const css=document.createElement("style");
   css.textContent=".atlas-account{width:100%;padding:10px;border:1px solid #dbe5dc;border-radius:10px;background:#f7faf6;color:#225244;font-weight:700;margin:7px 0 0;cursor:pointer}.atlas-account:focus-visible{outline:3px solid #6e9d89}.atlas-auth-modal{border:1px solid #d7e2d7;border-radius:16px;padding:0;box-shadow:0 20px 70px #0f281f70;color:#213b2f;width:min(450px,calc(100% - 20px))}.atlas-auth-modal::backdrop{background:#132d2390}.atlas-auth-inner{padding:24px}.atlas-auth-inner h2{font:700 23px Georgia,serif;margin:0 0 13px}.atlas-auth-inner p{color:#62766a;font-size:13px;line-height:1.5}.atlas-auth-inner label{display:block;font-size:13px;font-weight:700}.atlas-auth-inner input{width:100%;padding:12px;border:1px solid #c9d8cd;border-radius:9px;margin:8px 0 12px;font:inherit}.atlas-auth-inner button{border-radius:9px;border:1px solid #b5cbbc;padding:10px;background:white;color:#225244;font-weight:700;cursor:pointer}.atlas-auth-inner .atlas-primary{background:#225244;color:white;border-color:#225244}.atlas-auth-buttons{display:flex;gap:8px;flex-wrap:wrap}.atlas-auth-status{margin-top:10px;min-height:19px;color:#a44a3b;font-size:13px}";
+  css.textContent += '.atlas-google-login{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 15px;background:#fff!important;color:#263c30!important;border:1px solid #b5cbbc!important}.atlas-google-login[hidden]{display:none}.atlas-google-mark{font-weight:800;font-size:19px;color:#4285f4}.atlas-google-login:disabled{opacity:.55;cursor:wait}';
   document.head.appendChild(css);
   const btn=document.createElement("button");btn.id="atlasAccountButton";btn.className="atlas-account";btn.type="button";
   const sidebar=document.getElementById("sidebar");
   const bottom=sidebar&&sidebar.querySelector(".sidebar-bottom");
   if(bottom)bottom.appendChild(btn);
   account=document.createElement("dialog");account.className="atlas-auth-modal";account.id="atlasAuthDialog";
-  account.innerHTML='<div class="atlas-auth-inner"><h2>Mein Kartenkonto</h2><p id="atlasAuthSummary"></p><form id="atlasLoginForm"><label for="atlasEmail">E-Mail-Adresse</label><input id="atlasEmail" type="email" autocomplete="email" required placeholder="name@beispiel.de"><div class="atlas-auth-buttons"><button class="atlas-primary" type="submit">Anmeldelink per E-Mail senden</button></div></form><div class="atlas-auth-buttons"><button type="button" id="atlasLogout" hidden>Abmelden</button><button type="button" id="atlasAuthClose">Schließen</button></div><p id="atlasAuthStatus" class="atlas-auth-status" role="status"></p><p>Ohne Konto: nur auf diesem Gerät. Mit Konto: private Cloud-Bibliothek auf allen Geräten. Die Anmeldung ist erst nach Einrichtung des Supabase-Projekts verfügbar.</p></div>';
+  account.innerHTML='<div class="atlas-auth-inner"><h2>Mein Kartenkonto</h2><p id="atlasAuthSummary"></p><button id="atlasGoogleLogin" class="atlas-google-login" type="button"><span class="atlas-google-mark" aria-hidden="true">G</span>Mit Google anmelden</button><form id="atlasLoginForm"><label for="atlasEmail">E-Mail-Adresse</label><input id="atlasEmail" type="email" autocomplete="email" required placeholder="name@beispiel.de"><div class="atlas-auth-buttons"><button class="atlas-primary" type="submit">Anmeldelink per E-Mail senden</button></div></form><div class="atlas-auth-buttons"><button type="button" id="atlasLogout" hidden>Abmelden</button><button type="button" id="atlasAuthClose">Schließen</button></div><p id="atlasAuthStatus" class="atlas-auth-status" role="status"></p><p>Ohne Konto: nur auf diesem Gerät. Mit Konto: private Cloud-Bibliothek auf allen Geräten. Die Anmeldung ist erst nach Einrichtung des Supabase-Projekts verfügbar.</p></div>';
   document.body.appendChild(account);
   btn.addEventListener("click",()=>{renderState();account.showModal();});
   id("atlasAuthClose").addEventListener("click",()=>account.close());
   account.addEventListener("click",e=>{if(e.target===account)account.close();});
+  id("atlasGoogleLogin").addEventListener("click",async()=>{
+    if(!client||user)return;
+    const button=id("atlasGoogleLogin");
+    button.disabled=true;
+    lastError="Weiterleitung zu Google wird gestartet …";
+    renderState();
+    try{
+      // redirectTo must match the allowed Supabase Redirect URL.
+      // GitHub Pages uses a sub-path; preserve it in full.
+      const returnUrl=location.origin+location.pathname;
+      const {error}=await client.auth.signInWithOAuth({
+        provider:"google",
+        options:{redirectTo:returnUrl}
+      });
+      if(error)throw error;
+    }catch(error){
+      lastError="Google-Anmeldung fehlgeschlagen: "+(error.message||String(error));
+      button.disabled=false;
+      renderState();
+    }
+  });
   id("atlasLoginForm").addEventListener("submit",async e=>{
     e.preventDefault();
     if(!client)return;
