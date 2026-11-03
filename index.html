@@ -158,6 +158,10 @@
     .about-modal .btn{width:100%;margin-top:15px}
     .state-status{font-size:11px;color:#7d8e80;margin-top:8px;min-height:15px}
     .about-link{font-size:11px;border:0;background:transparent;color:#5a7e6d;padding:5px 0;text-decoration:underline;text-underline-offset:2px}
+    .home-summary{margin:9px 0 0;color:#708178;font-size:11px;line-height:1.45}
+    .legal-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:5px}
+    .legal-links a{font-size:11px;color:#406c58;text-decoration:underline;text-underline-offset:2px}
+    .legal-links a:focus-visible{outline:2px solid #3d7862;outline-offset:3px}
     @media(max-width:900px){
       .sidebar{width:340px;flex-basis:340px}.sidebar-top{padding:17px}.mode-panel{top:73px}
     }
@@ -245,6 +249,7 @@
           <div class="brand-text"><strong>Historischer Kartenatlas</strong><small>Vergangenheit entdecken</small></div>
           <button id="closeSidebar" class="mobile-close" title="Kartenauswahl schließen" aria-label="Kartenauswahl schließen">×</button>
         </div>
+        <p class="home-summary">Historische Karten entdecken, mit heutigen Karten vergleichen und eigene Kartensammlungen verwalten.</p>
         <div class="search-box">
           <span class="mag" aria-hidden="true">⌕</span>
           <label for="mapSearch" class="sr-only">Historische Karten durchsuchen</label>
@@ -265,7 +270,8 @@
         </div>
         <label class="check-row"><input id="followLocation" type="checkbox"> Standort beim Gehen verfolgen</label>
         <div class="state-status" id="locationStatus" role="status"></div>
-        <button id="aboutButton" class="about-link" type="button">Hilfe, Quellen und Datenschutz</button>
+        <button id="aboutButton" class="about-link" type="button">Hilfe und Kartenquellen</button>
+        <nav class="legal-links" aria-label="Rechtliche Informationen"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="nutzungsbedingungen.html" target="_blank" rel="noopener">Nutzungsbedingungen</a></nav>
       </div>
     </aside>
     <main class="stage" aria-label="Interaktive historische Karte">
@@ -336,8 +342,9 @@
     <p><b>Hinweis für iPhone/iPad:</b> Beim direkten Öffnen aus Dateien in Edge (edge://external-file) kann der Browser externe Skripte blockieren. Für den zuverlässigen Betrieb die index.html über HTTPS, beispielsweise GitHub Pages, aufrufen. Kartenkacheln benötigen weiterhin Internet.</p>
     <p><b>Bedienung:</b> Eine Karte aus der Bibliothek auswählen, ihre Deckkraft einstellen oder unter „Vergleichen“ die Trennlinie verschieben. Die Zeitleiste wechselt zwischen datierten Karten derselben Region. Über die Suche lassen sich heutige Adressen ansteuern.</p>
     <p>Die automatische Positionierung nutzt <b>ungefähre Regionsmittelpunkte</b>, keine geprüften Kartengrenzen. Einige alte externe Kachelserver können nicht mehr erreichbar sein; die Quelladressen wurden bewusst unverändert übernommen. Bei historischen Karten können unkartierte Flächen transparent bleiben.</p>
-    <p>Favoriten werden ausschließlich lokal in diesem Browser gespeichert. Der Standort und optional die Kompassrichtung werden erst auf Knopfdruck angefragt. Die Kompassanzeige kann auf iOS eine zusätzliche Sensorfreigabe benötigen. Ein geteilter Link kann den gerade sichtbaren Kartenausschnitt und damit auch eine Standortposition enthalten.</p>
+    <p>Ohne Anmeldung werden deine Favoriten und eigenen Karten lokal im Browser gespeichert. Mit Benutzerkonto können persönliche Kartenbibliotheken über Supabase synchronisiert werden. Der Standort und optional die Kompassrichtung werden erst auf Knopfdruck angefragt. Ein geteilter Link kann den sichtbaren Kartenausschnitt und damit auch eine Standortposition enthalten.</p>
     <p>Grundkarte: © OpenStreetMap-Mitwirkende. Historische Karten: jeweilige Anbieter und Originalquellen; Lizenzen und Urheberrechte sind dort einzusehen.</p>
+    <p><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> · <a href="nutzungsbedingungen.html" target="_blank" rel="noopener">Nutzungsbedingungen</a></p>
     <button id="closeDialog" class="btn btn-primary" type="button">Schließen</button>
   </dialog>
   <script src="atlas-config.js"></script>
