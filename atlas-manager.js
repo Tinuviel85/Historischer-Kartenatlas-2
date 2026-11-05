@@ -436,6 +436,9 @@
         localStorage.setItem(KEY, JSON.stringify(data));location.reload();
       } catch(e) { api.setNotice("Import fehlgeschlagen: "+e.message,6500); }
     });
+    if (window.AtlasHistoMap) window.AtlasHistoMap.mount({
+      parent:el("managerDiscover"), map:api.map, maps:maps, add:upsert
+    });
     return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap};
   }
   window.AtlasManager = {mount:mount};
