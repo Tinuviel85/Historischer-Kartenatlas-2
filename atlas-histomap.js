@@ -66,13 +66,14 @@ function mount({parent,map,maps,add}){
   finally{clearTimeout(timer);b.disabled=false;}
  });
  $("hmYear").addEventListener("change",choices);
- box.addEventListener("toggle",()=>{if(box.open&&records)choices();});
+ let firstOpen=true;
+ box.addEventListener("toggle",()=>{if(!box.open)return;if(records)choices();else if(firstOpen){firstOpen=false;$("hmLoad").click();}});
  $("hmXml").addEventListener("change",async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>14000000)throw Error("Datei zu groß");loadXml(await file.text());}catch(err){$("hmStatus").textContent=err.message;}e.target.value="";});
  $("hmAdd").addEventListener("click",()=>{
   if(!chosen.length||!isCompatible)return;
   const year=Number($("hmYear").value),layerName=chosen.map(x=>x.name).join(",");
   if(maps.some(m=>m&&!m.hidden&&m.type==="wms"&&m.sourceUrl===SERVICE&&m.layerName===layerName)){$("hmStatus").textContent="Diese Blätter sind bereits in der Bibliothek.";return;}
-  try{add({name:"HistoMap Berlin "+year+" · Kartenausschnitt",year,region:"Berlin",sourceUrl:SERVICE,type:"wms",layerName,provider:"Landesarchiv Berlin / HistoMap Berlin",detailUrl:HOME},null);$("hmStatus").textContent="Karte übernommen und gespeichert."; }
+  try{add({name:"HistoMap Berlin "+year+" · Kartenausschnitt",year,region:"Berlin",sourceUrl:SERVICE,type:"wms",layerName,provider:"Landesarchiv Berlin / HistoMap Berlin",detailUrl:HOME},null);$("hmStatus").textContent="Karte übernommen und gespeichert.";box.closest("dialog")?.close();document.getElementById("sidebar")?.classList.remove("open"); }
   catch(e){$("hmStatus").textContent="Übernahme fehlgeschlagen: "+e.message;}
  });
 }
