@@ -33,9 +33,11 @@ function renderState() {
     "Angemeldet als "+(user.email||"Benutzer")+" · Änderungen werden mit deiner Online-Bibliothek synchronisiert.":
     configured?"Ohne Anmeldung bleibt deine Kartenbibliothek ausschließlich in diesem Browser gespeichert.":
       "Lokaler Modus aktiv. Für geräteübergreifende Anmeldung fehlt noch die Supabase-Konfiguration.";
-  const form=id("atlasLoginForm"), logout=id("atlasLogout"), google=id("atlasGoogleLogin");
+  const form=id("atlasLoginForm"), logout=id("atlasLogout"), google=id("atlasGoogleLogin"), otherGoogle=id("atlasOtherGoogleToggle"), otherForm=id("atlasOtherGoogleForm");
   if(form)form.hidden=!!user||!configured;
   if(google)google.hidden=!!user||!configured;
+  if(otherGoogle)otherGoogle.hidden=!!user||!configured;
+  if(otherForm && (user||!configured))otherForm.hidden=true;
   if(logout)logout.hidden=!user;
   const status=id("atlasAuthStatus");
   if(status)status.textContent=lastError;
@@ -51,28 +53,25 @@ function attachUI() {
   const bottom=sidebar&&sidebar.querySelector(".sidebar-bottom");
   if(bottom)bottom.appendChild(btn);
   account=document.createElement("dialog");account.className="atlas-auth-modal";account.id="atlasAuthDialog";
-  account.innerHTML='<div class="atlas-auth-inner"><h2>Mein Kartenkonto</h2><p id="atlasAuthSummary"></p><button id="atlasGoogleLogin" class="atlas-google-login" type="button"><span class="atlas-google-mark" aria-hidden="true">G</span>Mit Google anmelden</button><form id="atlasLoginForm"><label for="atlasEmail">E-Mail-Adresse</label><input id="atlasEmail" type="email" autocomplete="email" required placeholder="name@beispiel.de"><div class="atlas-auth-buttons"><button class="atlas-primary" type="submit">Anmeldelink per E-Mail senden</button></div></form><div class="atlas-auth-buttons"><button type="button" id="atlasLogout" hidden>Abmelden</button><button type="button" id="atlasAuthClose">Schließen</button></div><p id="atlasAuthStatus" class="atlas-auth-status" role="status"></p><p>Ohne Konto: persönliche Karten nur in diesem Browser. Mit Konto: private Cloud-Bibliothek auf deinen Geräten. Die Synchronisierung setzt eine aktive Supabase-Verbindung voraus.</p><p><a href="datenschutz.html" target="_blank" rel="noopener noreferrer">Datenschutzerklärung</a> · <a href="nutzungsbedingungen.html" target="_blank" rel="noopener noreferrer">Nutzungsbedingungen</a></p></div>';
+  account.innerHTML='<div class="atlas-auth-inner"><h2>Mein Kartenkonto</h2><p id="atlasAuthSummary"></p><button id="atlasGoogleLogin" class="atlas-google-login" type="button"><span class="atlas-google-mark" aria-hidden="true">G</span>Mit Google anmelden</button><button id="atlasOtherGoogleToggle" type="button" style="margin:0 0 12px;width:100%">Anderes Google-Konto verwenden</button><form id="atlasOtherGoogleForm" hidden><label for="atlasOtherGoogleEmail">Google-E-Mail-Adresse des anderen Kontos</label><input id="atlasOtherGoogleEmail" type="email" inputmode="email" autocomplete="off" required placeholder="anderes-konto@gmail.com"><div class="atlas-auth-buttons"><button class="atlas-primary" type="submit">Mit diesem Google-Konto fortfahren</button></div></form><form id="atlasLoginForm"><label for="atlasEmail">E-Mail-Adresse</label><input id="atlasEmail" type="email" autocomplete="email" required placeholder="name@beispiel.de"><div class="atlas-auth-buttons"><button class="atlas-primary" type="submit">Anmeldelink per E-Mail senden</button></div></form><div class="atlas-auth-buttons"><button type="button" id="atlasLogout" hidden>Abmelden</button><button type="button" id="atlasAuthClose">Schließen</button></div><p id="atlasAuthStatus" class="atlas-auth-status" role="status"></p><p>Ohne Konto: persönliche Karten nur in diesem Browser. Mit Konto: private Cloud-Bibliothek auf deinen Geräten. Die Synchronisierung setzt eine aktive Supabase-Verbindung voraus.</p><p><a href="datenschutz.html" target="_blank" rel="noopener noreferrer">Datenschutzerklärung</a> · <a href="nutzungsbedingungen.html" target="_blank" rel="noopener noreferrer">Nutzungsbedingungen</a></p></div>';
   document.body.appendChild(account);
   btn.addEventListener("click",()=>{renderState();account.showModal();});
   id("atlasAuthClose").addEventListener("click",()=>account.close());
   account.addEventListener("click",e=>{if(e.target===account)account.close();});
-  id("atlasGoogleLogin").addEventListener("click",async()=>{
+  async function beginGoogleOAuth(emailHint, button){
     if(!client||user)return;
-    const button=id("atlasGoogleLogin");
     button.disabled=true;
     lastError="Weiterleitung zu Google wird gestartet …";
     renderState();
     try{
-      // redirectTo must match the allowed Supabase Redirect URL.
-      // GitHub Pages uses a sub-path; preserve it in full.
       const returnUrl=location.origin+location.pathname;
+      // Google supports login_hint to select or prefill a particular account
+      // even when the browser has a different default Google session.
+      const queryParams={prompt:"select_account"};
+      if(emailHint)queryParams.login_hint=emailHint;
       const {error}=await client.auth.signInWithOAuth({
         provider:"google",
-        options:{
-          redirectTo:returnUrl,
-          // Always present Google account chooser instead of silently picking a default.
-          queryParams:{prompt:"select_account"}
-        }
+        options:{redirectTo:returnUrl,queryParams}
       });
       if(error)throw error;
     }catch(error){
@@ -80,6 +79,18 @@ function attachUI() {
       button.disabled=false;
       renderState();
     }
+  }
+  id("atlasGoogleLogin").addEventListener("click",()=>beginGoogleOAuth(null,id("atlasGoogleLogin")));
+  id("atlasOtherGoogleToggle").addEventListener("click",()=>{
+    const form=id("atlasOtherGoogleForm");
+    form.hidden=!form.hidden;
+    if(!form.hidden)id("atlasOtherGoogleEmail").focus();
+  });
+  id("atlasOtherGoogleForm").addEventListener("submit",event=>{
+    event.preventDefault();
+    const email=id("atlasOtherGoogleEmail").value.trim();
+    if(!email||!id("atlasOtherGoogleEmail").checkValidity())return;
+    beginGoogleOAuth(email,id("atlasOtherGoogleForm").querySelector('[type="submit"]'));
   });
   id("atlasLoginForm").addEventListener("submit",async e=>{
     e.preventDefault();
