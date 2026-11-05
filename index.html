@@ -163,6 +163,37 @@
     .legal-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:5px}
     .legal-links a{font-size:11px;color:#406c58;text-decoration:underline;text-underline-offset:2px}
     .legal-links a:focus-visible{outline:2px solid #3d7862;outline-offset:3px}
+    /* Mobile-first Atlas layout V3 */
+    .map-tools{position:absolute;z-index:980;right:14px;top:14px;display:flex;flex-direction:column;align-items:flex-end}
+    .tools-toggle{width:43px;height:43px;border:1px solid #dce6dd;border-radius:12px;background:white;color:#214c3f;box-shadow:0 4px 16px #18372928;display:grid;place-items:center;font-size:21px;font-weight:700}
+    .tools-toggle[aria-expanded="true"]{color:#fff;background:var(--forest)}
+    .tools-menu{margin-top:8px;width:min(285px,calc(100vw - 28px));max-height:calc(100dvh - 110px);overflow-y:auto;overscroll-behavior:contain;padding:12px;display:flex;flex-direction:column;gap:8px;background:#fff;border-radius:15px;border:1px solid #dce6dd;box-shadow:var(--shadow)}
+    .tools-menu>button{position:static!important;display:block;min-height:42px;width:100%;border:1px solid #e4ebe4;border-radius:10px;background:#f8faf8;box-shadow:none;padding:10px 13px;color:#254d3e;font-size:13px;font-weight:700;text-align:left}
+    .tools-menu .zoom-panel{position:static;top:auto;right:auto;width:100%;display:flex;flex-direction:row;box-shadow:none;border:1px solid #e4ebe4}
+    .tools-menu .zoom-panel button{width:50%;height:43px}
+    .tools-menu .zoom-panel button+button{border-top:0;border-left:1px solid #e4ebe4}
+    .tools-menu .check-row{margin:4px 0 0;line-height:1.5}
+    .tools-menu .state-status{margin:0}
+    .favorites-filter{margin-top:10px;width:100%;background:#f7faf7;border:1px solid #dce6dd;border-radius:10px;color:var(--forest);font-weight:750;font-size:12px;padding:9px 12px;text-align:left}
+    .favorites-filter[aria-pressed="true"]{background:var(--forest);color:white}
+    .sidebar-settings summary{font-size:12px;font-weight:750;color:#526d5a;cursor:pointer}
+    .sidebar-settings .field-head{margin-top:12px}
+    .timeline-center strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .timeline-info{flex:none!important;width:30px!important;height:30px!important;border-radius:50%!important;font-size:16px!important;font-weight:750}
+    .map-attribution{right:auto;width:max-content;max-width:calc(100% - 25px);min-height:0;padding:4px 8px;border-radius:0 8px 0 0;background:#ffffffbc;font-size:9px}
+    @media(max-width:680px){
+      .sidebar{position:fixed;inset:0;width:100%;height:100dvh;max-height:100dvh;border:0;border-radius:0;box-shadow:0 2px 40px #1329233d;transform:translateY(105%);overflow:hidden}
+      .sidebar-top{padding:calc(9px + env(safe-area-inset-top)) 15px 7px}
+      .home-summary{display:none}
+      .search-box{margin-top:10px}
+      .filter-scroller{padding-top:9px}
+      .side-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:9px 14px 22px}
+      .sidebar-bottom{padding:8px 15px calc(9px + env(safe-area-inset-bottom));max-height:40dvh;overflow-y:auto}
+      .mobile-open{display:grid;place-items:center;left:14px;top:13px;width:43px;height:43px;padding:0;font-size:23px}
+      .map-tools{top:13px;right:14px}
+      .map-bottom{bottom:calc(38px + env(safe-area-inset-bottom))}
+      .mode-panel{top:73px;left:14px}
+    }
     @media(max-width:900px){
       .sidebar{width:340px;flex-basis:340px}.sidebar-top{padding:17px}.mode-panel{top:73px}
     }
@@ -257,22 +288,21 @@
           <input class="text-input" id="mapSearch" type="search" placeholder="Karte, Ort oder Jahr suchen …" autocomplete="off">
         </div>
         <div id="regions" class="filter-scroller" aria-label="Nach Region filtern"></div>
+        <button id="favoritesFilter" class="favorites-filter" type="button" aria-pressed="false">☆ Favoriten</button>
       </div>
       <div class="side-scroll">
         <div class="section-title"><h2>Kartensammlung</h2><span id="mapCount"></span></div>
         <div id="mapList" class="map-list" role="listbox" aria-label="Historische Karten"></div>
       </div>
       <div class="sidebar-bottom">
-        <div class="field-head"><label for="opacityRange">Historische Karte: Deckkraft</label><output id="opacityValue" for="opacityRange">78 %</output></div>
-        <input id="opacityRange" type="range" min="0" max="100" step="1" value="78" aria-label="Deckkraft der historischen Karte in Prozent">
-        <div class="bottom-actions">
-          <button id="locateButton" class="btn btn-primary" type="button">◎ Mein Standort</button>
-          <button id="infoButton" class="btn" type="button">ⓘ Karteninfo</button>
-        </div>
-        <label class="check-row"><input id="followLocation" type="checkbox"> Standort beim Gehen verfolgen</label>
-        <div class="state-status" id="locationStatus" role="status"></div>
-        <button id="aboutButton" class="about-link" type="button">Hilfe und Kartenquellen</button>
-        <nav class="legal-links" aria-label="Rechtliche Informationen"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="nutzungsbedingungen.html" target="_blank" rel="noopener">Nutzungsbedingungen</a></nav>
+        <details class="sidebar-settings">
+          <summary>Deckkraft, Hilfe und Rechtliches</summary>
+          <div class="field-head"><label for="opacityRange">Historische Karte: Deckkraft</label><output id="opacityValue" for="opacityRange">78 %</output></div>
+          <input id="opacityRange" type="range" min="0" max="100" step="1" value="78">
+          <div class="bottom-actions"><button id="infoButton" class="btn" type="button">ⓘ Karteninfo</button></div>
+          <button id="aboutButton" class="about-link" type="button">Hilfe und Kartenquellen</button>
+          <nav class="legal-links" aria-label="Rechtliche Informationen"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="nutzungsbedingungen.html" target="_blank" rel="noopener">Nutzungsbedingungen</a></nav>
+        </details>
       </div>
     </aside>
     <main class="stage" aria-label="Interaktive historische Karte">
@@ -286,18 +316,17 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
         Neu zentrieren
       </button>
-      <div class="zoom-panel" aria-label="Karte zoomen"><button id="zoomIn" type="button" aria-label="Vergrößern">+</button><button id="zoomOut" type="button" aria-label="Verkleinern">−</button></div>
-      <div class="map-attribution"><a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a> · <a id="sourceAttributionLink" href="#" target="_blank" rel="noopener noreferrer">Historische Kartenquelle</a></div>
-      <button id="openSidebar" class="mobile-open" type="button">☰ Karten auswählen</button>
-      <button id="locateMapButton" class="gps-map-button" type="button" title="Auf meinen aktuellen Standort zoomen" aria-label="Auf meinen aktuellen Standort zoomen">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-        Mein Standort
-      </button>
-      <div class="map-topbar">
-        <div class="map-title" aria-live="polite"><div id="titleYear" class="yearbox">Antike</div><div class="map-title-name"><strong id="titleMap">Historische Karte</strong><small id="titleRegion">Karte laden …</small></div></div>
-        <div class="top-actions">
-          <button id="addressButton" class="icon-btn" type="button" title="Adresse suchen" aria-label="Adresse suchen">⌕</button>
-          <button id="shareButton" class="icon-btn" type="button" title="Kartenausschnitt teilen" aria-label="Kartenausschnitt teilen">↗</button>
+      <div class="map-attribution"><a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> <a id="sourceAttributionLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Kartenquelle</a></div>
+      <button id="openSidebar" class="mobile-open" type="button" title="Karten auswählen" aria-label="Karten auswählen">☰</button>
+      <div class="map-tools">
+        <button id="toolsToggle" class="tools-toggle" type="button" aria-label="Kartenwerkzeuge öffnen" aria-expanded="false" aria-controls="toolsMenu">☷</button>
+        <div id="toolsMenu" class="tools-menu" hidden>
+          <button id="locateMapButton" type="button">◎ Mein Standort</button>
+          <button id="addressButton" type="button">⌕ &nbsp; Adresse suchen</button>
+          <button id="shareButton" type="button">↗ &nbsp; Teilen</button>
+          <div class="zoom-panel" aria-label="Karte zoomen"><button id="zoomIn" type="button" aria-label="Vergrößern">+</button><button id="zoomOut" type="button" aria-label="Verkleinern">−</button></div>
+          <label class="check-row"><input id="followLocation" type="checkbox"> Standort beim Gehen verfolgen</label>
+          <div class="state-status" id="locationStatus" role="status"></div>
         </div>
       </div>
       <div class="mode-panel" role="group" aria-label="Darstellungsmodus">
@@ -330,7 +359,8 @@
         <div id="compareRangeBox" class="compare-range-box"><span>Damals</span><input id="compareRange" type="range" min="0" max="100" value="50" step="1" aria-label="Position des Kartenvergleichs"><span>Heute</span></div>
         <div class="timeline" aria-label="Zeitleiste der Region">
           <button id="prevYear" type="button" title="Ältere Karte" aria-label="Ältere Karte">‹</button>
-          <div class="timeline-center"><strong id="timelineYear">Historische Karte</strong><small id="timelineText">Weitere Karten derselben Region entdecken</small></div>
+          <div class="timeline-center"><strong id="timelineYear">Berlin · Ohne historische Karte</strong><small id="timelineText">Karte auswählen oder durch Jahre blättern</small></div>
+          <button id="timelineInfo" class="timeline-info" type="button" aria-label="Karteninformationen" title="Karteninformationen" disabled>ⓘ</button>
           <button id="nextYear" type="button" title="Neuere Karte" aria-label="Neuere Karte">›</button>
         </div>
       </div>
@@ -443,7 +473,7 @@
       let savedFavorites=[];
       try { savedFavorites=JSON.parse(localStorage.getItem('historischer-atlas-favoriten')||'[]'); if(!Array.isArray(savedFavorites))savedFavorites=[]; } catch (_) { savedFavorites=[]; }
       let favorites=new Set(savedFavorites.filter(Number.isInteger));
-      let regionFilter='Alle';
+      let regionFilter='Berlin';
       let active=null, layer=null, mode='overlay', opacity=.78, split=.5;
       let gpsAccuracy=null, gpsWatchId=null, gpsKnownPosition=null, gpsLastAccuracy=null, compassHeading=null, compassListening=false;
       let autoFollowCamera=false, firstFollowFix=false, gpsCameraMove=false;
@@ -490,6 +520,13 @@
       const closeMobile=() => $('sidebar').classList.remove('open');
       $('openSidebar').addEventListener('click',()=>$('sidebar').classList.add('open'));
       $('closeSidebar').addEventListener('click',closeMobile);
+      const closeTools=()=>{$('toolsMenu').hidden=true;$('toolsToggle').setAttribute('aria-expanded','false');};
+      $('toolsToggle').addEventListener('click',()=>{
+        const open=$('toolsMenu').hidden;$('toolsMenu').hidden=!open;$('toolsToggle').setAttribute('aria-expanded',String(open));
+      });
+      document.addEventListener('pointerdown',e=>{
+        if(!$('toolsMenu').hidden&&!e.target.closest('.map-tools'))closeTools();
+      });
       const normalRegion = r => ['Spandau','Tiergarten','Grunewald','Charlottenburg'].includes(r)?'Berlin':r;
       const mapGroup=m=>normalRegion(m.region);
       function filteredMaps(){
@@ -501,12 +538,20 @@
       }
       function renderRegions(){
         $('regions').replaceChildren();
-        for(const r of definedRegions){
-          const b=document.createElement('button');b.type='button';b.className='pill';b.textContent=r;b.setAttribute('aria-pressed',String(r===regionFilter));
+        const values=[...new Set(definedRegions.filter(r=>!['Alle','Favoriten','Weitere'].includes(r)))]
+          .sort((a,b)=>a.localeCompare(b,'de',{sensitivity:'base'}));
+        for(const r of ['Alle',...values,...(definedRegions.includes('Weitere')?['Weitere']:[])]){
+          const b=document.createElement('button');b.type='button';b.className='pill';b.textContent=r;
+          b.setAttribute('aria-pressed',String(r===regionFilter));
           b.addEventListener('click',()=>{regionFilter=r;renderRegions();renderList();});
           $('regions').appendChild(b);
         }
+        $('favoritesFilter').setAttribute('aria-pressed',String(regionFilter==='Favoriten'));
+        $('favoritesFilter').textContent='☆ Favoriten'+(favorites.size?' · '+favorites.size:'');
       }
+      $('favoritesFilter').addEventListener('click',()=>{
+        regionFilter=regionFilter==='Favoriten'?'Alle':'Favoriten';renderRegions();renderList();
+      });
       function renderList(){
         const values=filteredMaps();$('mapCount').textContent=`${values.length} von ${maps.filter(m=>!m.hidden).length}`;
         const wrap=$('mapList');wrap.replaceChildren();
@@ -533,7 +578,7 @@
         if(favorites.has(id))favorites.delete(id);else favorites.add(id);
         try {localStorage.setItem('historischer-atlas-favoriten',JSON.stringify([...favorites])); if(window.AtlasCloud?.isAuthenticated())window.AtlasCloud.syncFavorites([...favorites]);}
         catch (_){setNotice('Favoriten konnten in diesem Browser nicht gespeichert werden.');}
-        renderList();
+        renderRegions();renderList();
       }
       $('mapSearch').addEventListener('input',renderList);
       function applyPane(){
@@ -617,12 +662,25 @@
       }
       function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
       function updateTimeline(){
-        if(!active)return;
+        if(!active){
+          const berlin=maps.filter(m=>!m.hidden&&mapGroup(m)==='Berlin'&&m.year!==null)
+            .sort((a,b)=>a.year-b.year||a.id-b.id);
+          $('timelineYear').textContent='Berlin · Ohne historische Karte';
+          $('timelineText').textContent='Karte auswählen oder mit › durch die Jahre';
+          $('timelineInfo').disabled=true;
+          $('prevYear').disabled=true;
+          $('nextYear').disabled=berlin.length===0;
+          $('nextYear').onclick=()=>{if(berlin.length)selectMap(berlin[0].id);};
+          $('prevYear').onclick=null;
+          return;
+        }
         const group=mapGroup(active);
-        const timeline=maps.filter(m=>!m.hidden&&mapGroup(m)===group&&m.year!==null).sort((a,b)=>a.year-b.year||a.id-b.id);
+        const timeline=maps.filter(m=>!m.hidden&&mapGroup(m)===group&&m.year!==null)
+          .sort((a,b)=>a.year-b.year||a.id-b.id);
         const pos=timeline.findIndex(m=>m.id===active.id);
-        $('timelineYear').textContent=active.year?String(active.year):(active.name.toLowerCase().includes('antik')?'Antike':active.displayName);
-        $('timelineText').textContent=`${group} · ${pos>=0?`${pos+1} von ${timeline.length} datierten Karten`:`${timeline.length} datierte Karten verfügbar`}`;
+        $('timelineYear').textContent=(active.year?active.year+' · ':'')+active.displayName;
+        $('timelineText').textContent=active.region+' · '+active.provider.replace(' (alte Adresse)','');
+        $('timelineInfo').disabled=false;
         $('prevYear').disabled=pos<=0;
         $('nextYear').disabled=pos<0||pos===timeline.length-1;
         $('prevYear').onclick=()=>{if(pos>0)selectMap(timeline[pos-1].id);};
@@ -634,6 +692,7 @@
         dismissNotice();
         if(layer){historicalMap.removeLayer(layer);layer=null;}
         active=m;
+        detailOpen=false;$('detailCard').classList.remove('open');
         focusMap(m,previous,restoreView);
         syncHistorical();
         layer=(m.type==='wms'
@@ -643,15 +702,16 @@
         applyPane();
         $('sourceAttributionLink').href=m.detailUrl;
         $('sourceAttributionLink').textContent=m.provider.replace(' (alte Adresse)','');
-        $('titleMap').textContent=m.displayName;
-        $('titleRegion').textContent=`${m.region} · ${m.provider}`;
-        $('titleYear').textContent=m.year?String(m.year):m.name.toLowerCase().includes('antik')?'Antike':'Karte';
+        $('sourceAttributionLink').hidden=false;
+        $('compareMode').disabled=false;
         renderList();updateTimeline();showDetail();
       }
       $('closeDetail').addEventListener('click',()=>{
         detailOpen=false;$('detailCard').classList.remove('open');
       });
-      $('infoButton').addEventListener('click',()=>{detailOpen=!detailOpen;$('detailCard').classList.toggle('open',detailOpen);});
+      const toggleDetails=()=>{if(!active)return;detailOpen=!detailOpen;$('detailCard').classList.toggle('open',detailOpen);};
+      $('infoButton').addEventListener('click',toggleDetails);
+      $('timelineInfo').addEventListener('click',toggleDetails);
       $('detailCard').addEventListener('click',e=>e.stopPropagation());
       function renderGpsIndicator(){
         if(!gpsKnownPosition)return;
@@ -780,11 +840,10 @@
           {enableHighAccuracy:true,maximumAge:5000,timeout:15000}
         );
       }
-      $('locateButton').addEventListener('click',locateOnce);
-      $('locateMapButton').addEventListener('click',locateOnce);
+      $('locateMapButton').addEventListener('click',()=>{closeTools();locateOnce();});
       $('recenterButton').addEventListener('click',recenterAndFollow);
       $('followLocation').addEventListener('change',e=>{if(e.target.checked)startTracking();else stopTracking();});
-      $('addressButton').addEventListener('click',()=>{$('addressPopup').classList.toggle('open');if($('addressPopup').classList.contains('open'))$('addressInput').focus();});
+      $('addressButton').addEventListener('click',()=>{closeTools();$('addressPopup').classList.toggle('open');if($('addressPopup').classList.contains('open'))$('addressInput').focus();});
       let lastAddressRequest=0;
       $('addressForm').addEventListener('submit',async e=>{
         e.preventDefault();
@@ -816,9 +875,10 @@
         }catch(err){if(err.name!=='AbortError')out.textContent='Ortssuche derzeit nicht verfügbar. Bitte erneut versuchen.';}
       });
       $('shareButton').addEventListener('click',async()=>{
-        if(!active)return;
+        closeTools();
         const center=map.getCenter();
-        const params=new URLSearchParams({karte:String(active.id),lat:center.lat.toFixed(5),lon:center.lng.toFixed(5),zoom:String(map.getZoom()),modus:mode,deckkraft:String(Math.round(opacity*100)),teilung:String(Math.round(split*100))});
+        const params=new URLSearchParams({lat:center.lat.toFixed(5),lon:center.lng.toFixed(5),zoom:String(map.getZoom()),modus:mode,deckkraft:String(Math.round(opacity*100)),teilung:String(Math.round(split*100))});
+        if(active)params.set('karte',String(active.id));
         const url=new URL(window.location.href);url.hash=params.toString();
         const sharePrivacyWarning=gpsKnownPosition?' Achtung: Der Kartenausschnitt kann deinen Standort erkennen lassen.':'';
         try{
@@ -834,7 +894,7 @@
       $('aboutButton').addEventListener('click',()=>$('aboutDialog').showModal());
       // Tastaturbedienbare alternative Öffnung: 'i', solange kein Eingabefeld fokussiert ist.
       document.addEventListener('keydown',e=>{
-        if(e.key==='Escape'){$('addressPopup').classList.remove('open');closeMobile();}
+        if(e.key==='Escape'){$('addressPopup').classList.remove('open');closeMobile();closeTools();}
         if(e.key.toLowerCase()==='i'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)&&!e.ctrlKey&&!e.altKey){if(!$('aboutDialog').open)$('aboutDialog').showModal();}
       });
       function restoreFromHash(){
@@ -846,10 +906,12 @@
         if(validView)map.setView([lat,lon],zoom,{animate:false});
         if(p.has('deckkraft')){const n=Number(p.get('deckkraft'));if(Number.isFinite(n)&&n>=0&&n<=100){opacity=n/100;$('opacityRange').value=String(n);}}
         if(p.has('teilung')){const n=Number(p.get('teilung'));if(Number.isFinite(n))setSplit(n/100);}
-        selectMap(validId,{restoreView:validView});
-        setMode(p.get('modus')==='compare'?'compare':'overlay');
+        if(p.has('karte'))selectMap(validId,{restoreView:validView});
+        else updateTimeline();
+        setMode(active&&p.get('modus')==='compare'?'compare':'overlay');
       }
       window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
+      $('compareMode').disabled=true;
       renderRegions();
       restoreFromHash();
       // Bei Browserzurück/-vor wird der geteilte Kartenausschnitt erneut hergestellt.
