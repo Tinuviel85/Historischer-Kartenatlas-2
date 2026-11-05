@@ -68,7 +68,11 @@ function attachUI() {
       const returnUrl=location.origin+location.pathname;
       const {error}=await client.auth.signInWithOAuth({
         provider:"google",
-        options:{redirectTo:returnUrl}
+        options:{
+          redirectTo:returnUrl,
+          // Always present Google account chooser instead of silently picking a default.
+          queryParams:{prompt:"select_account"}
+        }
       });
       if(error)throw error;
     }catch(error){
