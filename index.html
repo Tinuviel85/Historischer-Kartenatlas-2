@@ -221,6 +221,39 @@
       .map-bottom{bottom:calc(38px + env(safe-area-inset-bottom))}
       .mode-panel{top:73px;left:14px}
     }
+
+    /* Floating, icon-only map tools: no opaque enclosing card. */
+    .map-tools{position:absolute;z-index:980;top:14px;right:15px;display:flex;flex-direction:column;align-items:center;width:48px;overflow:visible}
+    .tools-toggle,.tools-menu .tool-icon,.tools-menu .zoom-panel .tool-icon{position:relative!important;top:auto!important;right:auto!important;left:auto!important;bottom:auto!important;min-width:46px!important;width:46px!important;min-height:46px!important;height:46px!important;display:grid!important;place-items:center!important;flex:none;box-shadow:none!important;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border:1px solid rgba(255,255,255,.12)!important;border-radius:50%!important;background:rgba(255,255,255,.13)!important;color:#153c32!important;padding:10px!important;font-size:22px!important;text-align:center!important;line-height:1!important;cursor:pointer}
+    .tools-toggle{background:rgba(255,255,255,.24)!important;filter:drop-shadow(0 1px 2px #fff9)}
+    .tools-toggle[aria-expanded="true"]{background:rgba(255,255,255,.28)!important}
+    .tools-toggle svg,.tools-menu .tool-icon svg{width:25px;height:25px;filter:drop-shadow(0 1px 2px rgba(255,255,255,.95))}
+    .tools-menu{position:relative;margin-top:8px;padding:0!important;width:48px!important;max-width:none!important;max-height:none!important;overflow:visible!important;background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;display:flex;flex-direction:column;align-items:center;gap:5px!important;overscroll-behavior:auto}
+    .tools-menu>.tool-icon,.tools-menu>.opacity-tool,.tools-menu>.zoom-panel,.tools-menu>.follow-tool{animation:atlasToolDrop .18s ease backwards;animation-delay:calc(var(--order,0)*27ms)}
+    .tools-menu>*:nth-child(1){--order:1}.tools-menu>*:nth-child(2){--order:2}.tools-menu>*:nth-child(3){--order:3}.tools-menu>*:nth-child(4){--order:4}.tools-menu>*:nth-child(5){--order:5}.tools-menu>*:nth-child(6){--order:6}
+    @keyframes atlasToolDrop{from{opacity:0;transform:translateY(-9px) scale(.93)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .tools-menu>.zoom-panel{position:static!important;display:flex!important;flex-direction:column!important;gap:5px!important;background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;box-shadow:none!important;width:46px!important;height:auto!important;overflow:visible!important}
+    .tools-menu .zoom-panel button+button{border:1px solid rgba(255,255,255,.12)!important}
+    .tools-menu .follow-tool{display:grid!important;position:relative!important}
+    .tools-menu .follow-tool:has(input:checked){background:rgba(19,87,68,.28)!important;color:#0b4939!important;box-shadow:inset 0 0 0 2px rgba(29,94,72,.28)!important}
+    .tools-menu .follow-tool:focus-within{outline:3px solid #6e9d89;outline-offset:1px}
+    .opacity-tool{position:relative;display:flex;align-items:center;justify-content:center;width:46px;height:46px}
+    .opacity-popover{position:absolute;z-index:1005;right:calc(100% + 10px);top:50%;transform:translateY(-50%);width:min(227px,calc(100vw - 92px));padding:14px 15px 13px;background:rgba(255,255,255,.94);border:1px solid rgba(161,181,166,.4);box-shadow:0 9px 25px #142c2740;border-radius:15px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+    .opacity-popover .field-head{margin-bottom:12px}
+    .opacity-popover input{display:block;width:100%;height:26px;touch-action:pan-x}
+    .map-info{flex:none;width:34px;height:34px;display:grid;place-items:center;border:1px solid #e1e8e1;border-radius:11px;background:#f9fbf9;color:#426755;font-size:20px;line-height:1}
+    .map-info:hover,.map-info:focus-visible{background:#ecf5ec;color:#1b4b3b}
+    @media(max-width:680px){
+      .map-tools{top:13px;right:13px}
+      .sidebar-bottom{padding:7px 15px calc(10px + env(safe-area-inset-bottom));max-height:28dvh}
+      .map-info{width:32px;height:32px}
+    }
+    @media(max-height:620px){
+      .tools-menu{gap:0!important}
+      .tools-toggle,.tools-menu .tool-icon,.tools-menu .zoom-panel .tool-icon{min-height:38px!important;height:38px!important;min-width:40px!important;width:40px!important}
+      .tools-menu .zoom-panel{gap:0!important}
+    }
+    @media(prefers-reduced-motion:reduce){.tools-menu>*{animation:none!important}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
   </style>
 </head>
@@ -295,14 +328,11 @@
         <div id="mapList" class="map-list" role="listbox" aria-label="Historische Karten"></div>
       </div>
       <div class="sidebar-bottom">
-        <details class="sidebar-settings">
-          <summary>Deckkraft, Hilfe und Rechtliches</summary>
-          <div class="field-head"><label for="opacityRange">Historische Karte: Deckkraft</label><output id="opacityValue" for="opacityRange">78 %</output></div>
-          <input id="opacityRange" type="range" min="0" max="100" step="1" value="78">
-          <div class="bottom-actions"><button id="infoButton" class="btn" type="button">ⓘ Karteninfo</button></div>
-          <button id="aboutButton" class="about-link" type="button">Hilfe und Kartenquellen</button>
-          <nav class="legal-links" aria-label="Rechtliche Informationen"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutz</a><a href="nutzungsbedingungen.html" target="_blank" rel="noopener">Nutzungsbedingungen</a></nav>
-        </details>
+        <button id="aboutButton" class="about-link" type="button">Hilfe und Kartenquellen</button>
+        <nav class="legal-links" aria-label="Rechtliche Informationen">
+          <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutz</a>
+          <a href="nutzungsbedingungen.html" target="_blank" rel="noopener">Nutzungsbedingungen</a>
+        </nav>
       </div>
     </aside>
     <main class="stage" aria-label="Interaktive historische Karte">
@@ -319,14 +349,27 @@
       <div class="map-attribution"><a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> <a id="sourceAttributionLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Kartenquelle</a></div>
       <button id="openSidebar" class="mobile-open" type="button" title="Karten auswählen" aria-label="Karten auswählen">☰</button>
       <div class="map-tools">
-        <button id="toolsToggle" class="tools-toggle" type="button" aria-label="Kartenwerkzeuge öffnen" aria-expanded="false" aria-controls="toolsMenu">☷</button>
-        <div id="toolsMenu" class="tools-menu" hidden>
-          <button id="locateMapButton" type="button">◎ Mein Standort</button>
-          <button id="addressButton" type="button">⌕ &nbsp; Adresse suchen</button>
-          <button id="shareButton" type="button">↗ &nbsp; Teilen</button>
-          <div class="zoom-panel" aria-label="Karte zoomen"><button id="zoomIn" type="button" aria-label="Vergrößern">+</button><button id="zoomOut" type="button" aria-label="Verkleinern">−</button></div>
-          <label class="check-row"><input id="followLocation" type="checkbox"> Standort beim Gehen verfolgen</label>
-          <div class="state-status" id="locationStatus" role="status"></div>
+        <button id="toolsToggle" class="tools-toggle" type="button" aria-label="Kartenwerkzeuge öffnen" aria-expanded="false" aria-controls="toolsMenu" title="Kartenwerkzeuge"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="11" cy="17" r="2" fill="currentColor" stroke="none"/></svg></button>
+        <div id="toolsMenu" class="tools-menu" hidden aria-label="Kartenwerkzeuge">
+          <button id="locateMapButton" class="tool-icon" type="button" aria-label="Mein Standort" title="Mein Standort"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+          <button id="addressButton" class="tool-icon" type="button" aria-label="Adresse suchen" title="Adresse suchen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button>
+          <button id="shareButton" class="tool-icon" type="button" aria-label="Karte teilen" title="Teilen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m0 0-4.5 4.5M12 3l4.5 4.5"/><path d="M4 13v5a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-5"/></svg></button>
+          <div class="opacity-tool">
+            <button id="opacityToggle" class="tool-icon" type="button" aria-label="Deckkraft einstellen" aria-expanded="false" aria-controls="opacityPopover" title="Deckkraft"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-2.8 3.9-7 8.1-7 12a7 7 0 0 0 14 0c0-3.9-4.2-8.1-7-12Z"/><path d="M9 16a3 3 0 0 0 3 3"/></svg></button>
+            <div id="opacityPopover" class="opacity-popover" role="group" aria-label="Deckkraft der historischen Karte" hidden>
+              <div class="field-head"><label for="opacityRange">Deckkraft</label><output id="opacityValue" for="opacityRange">78 %</output></div>
+              <input id="opacityRange" type="range" min="0" max="100" step="1" value="78" aria-label="Deckkraft der historischen Karte in Prozent">
+            </div>
+          </div>
+          <div class="zoom-panel" aria-label="Karte zoomen">
+            <button id="zoomIn" class="tool-icon" type="button" aria-label="Vergrößern" title="Vergrößern"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg></button>
+            <button id="zoomOut" class="tool-icon" type="button" aria-label="Verkleinern" title="Verkleinern"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M7 12h10"/></svg></button>
+          </div>
+          <label class="tool-icon follow-tool" title="Standort beim Gehen verfolgen">
+            <input id="followLocation" class="sr-only" type="checkbox" aria-label="Standort beim Gehen verfolgen">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V6a2 2 0 0 1 4 0v8a2 2 0 0 0 4 0V9a2 2 0 0 1 4 0v9"/><circle cx="18" cy="5" r="3"/></svg>
+          </label>
+          <div class="sr-only" id="locationStatus" role="status"></div>
         </div>
       </div>
       <div class="mode-panel" role="group" aria-label="Darstellungsmodus">
@@ -520,9 +563,17 @@
       const closeMobile=() => $('sidebar').classList.remove('open');
       $('openSidebar').addEventListener('click',()=>$('sidebar').classList.add('open'));
       $('closeSidebar').addEventListener('click',closeMobile);
-      const closeTools=()=>{$('toolsMenu').hidden=true;$('toolsToggle').setAttribute('aria-expanded','false');};
+      const closeOpacity=()=>{$('opacityPopover').hidden=true;$('opacityToggle').setAttribute('aria-expanded','false');};
+      const closeTools=()=>{$('toolsMenu').hidden=true;$('toolsToggle').setAttribute('aria-expanded','false');closeOpacity();};
       $('toolsToggle').addEventListener('click',()=>{
-        const open=$('toolsMenu').hidden;$('toolsMenu').hidden=!open;$('toolsToggle').setAttribute('aria-expanded',String(open));
+        const open=$('toolsMenu').hidden;
+        if(!open)closeTools();
+        else {$('toolsMenu').hidden=false;$('toolsToggle').setAttribute('aria-expanded','true');}
+      });
+      $('opacityToggle').addEventListener('click',()=>{
+        const open=$('opacityPopover').hidden;
+        $('opacityPopover').hidden=!open;
+        $('opacityToggle').setAttribute('aria-expanded',String(open));
       });
       document.addEventListener('pointerdown',e=>{
         if(!$('toolsMenu').hidden&&!e.target.closest('.map-tools'))closeTools();
@@ -567,8 +618,10 @@
           const star=document.createElement('button');star.type='button';star.className='star';star.textContent=favorites.has(m.id)?'★':'☆';star.title=favorites.has(m.id)?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen';star.setAttribute('aria-label',star.title);star.setAttribute('aria-pressed',String(favorites.has(m.id)));
           star.addEventListener('click',event=>{event.stopPropagation();toggleFavorite(m.id);});
           const edit=document.createElement('button');edit.type='button';edit.className='manager-edit';edit.textContent='✎';edit.title='Karte bearbeiten oder entfernen';edit.setAttribute('aria-label','Karte bearbeiten: '+m.name);edit.addEventListener('click',event=>{event.stopPropagation();window.atlasManager?.editMap(m.id);});
-          row.append(ico,main,edit,star);
-          row.addEventListener('click',event=>{if(event.target.closest('.star,.manager-edit'))return;selectMap(m.id);closeMobile();});
+          const info=document.createElement('button');info.type='button';info.className='map-info';info.textContent='ⓘ';info.title='Informationen zu dieser Karte';info.setAttribute('aria-label','Karteninfo: '+m.name);
+          info.addEventListener('click',event=>{event.stopPropagation();selectMap(m.id);closeMobile();detailOpen=true;$('detailCard').classList.add('open');});
+          row.append(ico,main,edit,info,star);
+          row.addEventListener('click',event=>{if(event.target.closest('.star,.manager-edit,.map-info'))return;selectMap(m.id);closeMobile();});
           row.addEventListener('keydown',event=>{if(event.target!==row)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();selectMap(m.id);closeMobile();}});
           frag.appendChild(row);
         }
@@ -710,7 +763,6 @@
         detailOpen=false;$('detailCard').classList.remove('open');
       });
       const toggleDetails=()=>{if(!active)return;detailOpen=!detailOpen;$('detailCard').classList.toggle('open',detailOpen);};
-      $('infoButton').addEventListener('click',toggleDetails);
       $('timelineInfo').addEventListener('click',toggleDetails);
       $('detailCard').addEventListener('click',e=>e.stopPropagation());
       function renderGpsIndicator(){
