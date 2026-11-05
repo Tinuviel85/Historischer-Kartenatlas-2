@@ -33,6 +33,16 @@
     var defaults = maps.map(function (m) { return Object.assign({}, m); });
     var saved = loadStore();
     var storedRegions = Array.isArray(saved.regions) ? saved.regions : [];
+    var baseRegionNames = new Set(regions);
+    var deletedRegions = Array.isArray(saved.deletedRegions)
+      ? [...new Set(saved.deletedRegions.filter(function (n) {return typeof n === "string" && n !== "Berlin" && n !== "Unbekannt";}))]
+      : [];
+    // Built-in regions removed by the user must remain removed after reloading.
+    deletedRegions.forEach(function (name) {
+      var ix = regions.indexOf(name);
+      if (ix !== -1) regions.splice(ix, 1);
+      delete defs[name];
+    });
     var custom = Array.isArray(saved.custom) ? saved.custom : [];
     var overrides = saved.overrides && typeof saved.overrides === "object" ? saved.overrides : {};
     var hidden = new Set(Array.isArray(saved.hidden) ? saved.hidden.filter(Number.isInteger) : []);
@@ -81,6 +91,7 @@
       var obj = {
         version: 2,
         regions: storedRegions,
+        deletedRegions: deletedRegions,
         custom: maps.slice(defaultCount).map(function (m) {
           return {name:m.name,region:m.region,year:m.year,sourceUrl:m.sourceUrl,detailUrl:m.detailUrl,provider:m.provider,type:m.type,layerName:m.layerName};
         }),
@@ -92,14 +103,14 @@
     }
     function redraw() { api.renderRegions(); api.renderList(); api.updateTimeline(); }
     var css = node("style");
-    css.textContent = ".manager-launch{width:100%;margin:10px 0 0;border:1px solid #b6cfbe;background:#eaf3ec;color:#214c3f;border-radius:10px;padding:10px;font-weight:750;font-size:12px;text-align:center}.manager-launch:hover{background:#dcecdf}.manager-edit{background:#f4f8f3;border:1px solid #dce6dd;color:#466b55;border-radius:8px;padding:5px 7px;font-size:13px}.manager-edit:hover{background:#dfebdd}.manager-modal{border:1px solid #dbe5db;border-radius:17px;padding:0;width:min(640px,calc(100% - 18px));max-height:90dvh;box-shadow:0 20px 90px #132d2b55;color:#284438;background:white}.manager-modal::backdrop{background:#11291f91}.manager-inner{padding:22px;max-height:87dvh;overflow:auto}.manager-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.manager-head h2{font:700 22px Georgia,serif;margin:0}.manager-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 15px}.manager-tab{border:1px solid #d9e3d9;background:#f8faf6;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:700;color:#375b4c}.manager-tab[aria-selected=true]{background:#245044;color:white}.manager-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.manager-fields label,.manager-label{display:block;font-size:12px;font-weight:700;color:#435a4b}.manager-fields input,.manager-fields select,.manager-search{width:100%;margin-top:5px;padding:11px 10px;border:1px solid #d1ddce;border-radius:9px;background:white;color:#20382c;font-size:14px}.manager-wide{grid-column:1/-1}.manager-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px}.manager-action{padding:10px 13px;border:1px solid #b8ccbf;background:#fff;color:#26483c;border-radius:9px;font-size:13px;font-weight:700}.manager-primary{background:#214d3e;color:white;border-color:#214d3e}.manager-danger{color:#933e34;border-color:#ecd0cd}.manager-muted{font-size:12px;color:#6a7c70;line-height:1.5}.manager-results{display:grid;gap:9px;margin-top:12px;max-height:38dvh;overflow:auto}.manager-result{padding:12px;border:1px solid #d9e3d9;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}.manager-result strong{display:block;font-size:13px;overflow-wrap:anywhere}.manager-result small{display:block;color:#718075;margin-top:4px}.manager-status{margin:9px 0;color:#4c6657;font-size:12px}.manager-hidden{display:none!important}@media(max-width:500px){.manager-fields{grid-template-columns:1fr}.manager-inner{padding:14px}.manager-head h2{font-size:19px}}";
+    css.textContent = ".manager-launch{width:100%;margin:10px 0 0;border:1px solid #b6cfbe;background:#eaf3ec;color:#214c3f;border-radius:10px;padding:10px;font-weight:750;font-size:12px;text-align:center}.manager-launch:hover{background:#dcecdf}.manager-edit{background:#f4f8f3;border:1px solid #dce6dd;color:#466b55;border-radius:8px;padding:5px 7px;font-size:13px}.manager-edit:hover{background:#dfebdd}.manager-modal{border:1px solid #dbe5db;border-radius:17px;padding:0;width:min(640px,calc(100% - 18px));max-height:90dvh;box-shadow:0 20px 90px #132d2b55;color:#284438;background:white}.manager-modal::backdrop{background:#11291f91}.manager-inner{padding:22px;max-height:87dvh;overflow:auto}.manager-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.manager-head h2{font:700 22px Georgia,serif;margin:0}.manager-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 15px}.manager-tab{border:1px solid #d9e3d9;background:#f8faf6;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:700;color:#375b4c}.manager-tab[aria-selected=true]{background:#245044;color:white}.manager-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.manager-fields label,.manager-label{display:block;font-size:12px;font-weight:700;color:#435a4b}.manager-fields input,.manager-fields select,.manager-search{width:100%;margin-top:5px;padding:11px 10px;border:1px solid #d1ddce;border-radius:9px;background:white;color:#20382c;font-size:14px}.manager-wide{grid-column:1/-1}.manager-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px}.manager-action{padding:10px 13px;border:1px solid #b8ccbf;background:#fff;color:#26483c;border-radius:9px;font-size:13px;font-weight:700}.manager-primary{background:#214d3e;color:white;border-color:#214d3e}.manager-danger{color:#933e34;border-color:#ecd0cd}.manager-muted{font-size:12px;color:#6a7c70;line-height:1.5}.manager-results{display:grid;gap:9px;margin-top:12px;max-height:38dvh;overflow:auto}.manager-result{padding:12px;border:1px solid #d9e3d9;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}.manager-result strong{display:block;font-size:13px;overflow-wrap:anywhere}.manager-result small{display:block;color:#718075;margin-top:4px}.manager-region-row{flex-wrap:wrap}.manager-region-actions{display:flex;gap:7px;flex-wrap:wrap}.manager-region-confirm{width:100%;margin-top:7px;padding:11px;border:1px solid #eededb;border-radius:11px;background:#fffaf8}.manager-region-confirm p{margin:0 0 9px}.manager-region-target{display:block;width:100%;margin-top:7px;padding:10px;border:1px solid #d1ddce;border-radius:9px;background:white;font-size:14px}.manager-status{margin:9px 0;color:#4c6657;font-size:12px}.manager-hidden{display:none!important}@media(max-width:500px){.manager-fields{grid-template-columns:1fr}.manager-inner{padding:14px}.manager-head h2{font-size:19px}}";
     document.head.appendChild(css);
     var launcher = node("button", "manager-launch", "+ Karten entdecken und verwalten");
     launcher.type = "button";
     el("regions").after(launcher);
     var dialog = node("dialog", "manager-modal");
     dialog.id = "managerDialog";
-    dialog.innerHTML = '<div class="manager-inner"><div class="manager-head"><h2>Kartenbibliothek verwalten</h2><button id="managerClose" class="manager-action" type="button" aria-label="Schließen">✕</button></div><div class="manager-tabs"><button id="managerDiscoverTab" class="manager-tab" type="button">Karten entdecken</button><button id="managerMapTab" class="manager-tab" type="button">Karte hinzufügen</button><button id="managerRegionTab" class="manager-tab" type="button">Regionen</button><button id="managerBackupTab" class="manager-tab" type="button">Sicherung</button></div><section id="managerDiscover"><form id="managerDiscoverForm"><label class="manager-label" for="managerDiscoverQuery">Historische Karten nach Ort oder Begriff suchen</label><div style="display:flex;gap:7px"><input id="managerDiscoverQuery" class="manager-search" required minlength="2" maxlength="90" value="Berlin" placeholder="Berlin, Wien, Rom …"><button class="manager-action manager-primary" type="submit">Suchen</button></div></form><p class="manager-muted">Suche in bereits georeferenzierten MapWarper-Karten. Angezeigte Treffer sind externe Angebote; Verfügbarkeit und Nutzungsrechte hängen vom Anbieter ab.</p><div id="managerSearchStatus" class="manager-status" role="status"></div><div id="managerResults" class="manager-results"></div><p class="manager-muted"><a href="https://mapwarper.net/" target="_blank" rel="noopener noreferrer">MapWarper öffnen ↗</a> · Weitere Geoportale werden später angebunden.</p></section><section id="managerMap" class="manager-hidden"><form id="managerMapForm" class="manager-fields"><label class="manager-wide">Kartenname<input id="mgrName" required maxlength="220" placeholder="z. B. Berlin 1910"></label><label>Jahr (optional)<input id="mgrYear" type="number" min="1" max="2100" placeholder="1910"></label><label>Region<select id="mgrRegion"></select></label><label>Kartentyp<select id="mgrType"><option value="xyz">XYZ / WMTS-Kachel-URL</option><option value="tms">TMS-Kachel-URL</option><option value="wms">WMS-Dienst</option></select></label><label>Kartenanbieter<input id="mgrProvider" placeholder="z. B. MapWarper"></label><label class="manager-wide">Kachel-URL oder WMS-Endpunkt<input id="mgrUrl" type="text" required spellcheck="false" placeholder="https://…/{z}/{x}/{y}.png"></label><label class="manager-wide" id="mgrLayerWrap">WMS-Layername<input id="mgrLayer" placeholder="Technischer Name der Kartenebene"></label><label class="manager-wide">Link zur Originalquelle (optional)<input id="mgrDetails" spellcheck="false" placeholder="https://…"></label><div class="manager-actions manager-wide"><button class="manager-action manager-primary" type="submit">Karte speichern</button><button id="mgrDelete" class="manager-action manager-danger manager-hidden" type="button">Karte entfernen</button><button id="mgrCancelEdit" class="manager-action" type="button">Abbrechen</button></div></form><p class="manager-muted">XYZ benötigt {z}, {x}, {y}. WMS benötigt den Layernamen aus „GetCapabilities“. Ein WMS-Server muss die verwendete Projektion EPSG:3857 unterstützen. Änderungen bleiben zunächst nur in diesem Browser gespeichert.</p></section><section id="managerRegion" class="manager-hidden"><form id="managerRegionForm" class="manager-fields"><label class="manager-wide">Neue Region / Ort<input id="mgrRegionName" required maxlength="100" placeholder="z. B. Potsdam"></label><label>Breitengrad<input id="mgrLat" type="number" min="-90" max="90" step="any" placeholder="52.4"></label><label>Längengrad<input id="mgrLon" type="number" min="-180" max="180" step="any" placeholder="13.0"></label><label>Karten-Zoom<input id="mgrZoom" type="number" min="2" max="19" value="12"></label><div class="manager-actions manager-wide"><button class="manager-action" type="button" id="mgrLookupRegion">Koordinaten automatisch suchen</button><button class="manager-action manager-primary" type="submit">Region speichern</button></div></form><p id="mgrRegionStatus" class="manager-status" role="status"></p><div id="mgrRegionList" class="manager-results"></div><p class="manager-muted">Regionen können neu angelegt und bearbeitet werden. Für die automatische Ortssuche verwenden wir OpenStreetMap / Nominatim.</p></section><section id="managerBackup" class="manager-hidden"><p class="manager-muted">Änderungen werden derzeit nur auf diesem Gerät gespeichert. Exportiere eine Sicherung, bevor du den Browser wechselst oder lokale Daten löschst. Die Datei enthält deine individuellen Karteneinträge, Regionen und ausgeblendeten Karten.</p><div class="manager-actions"><button id="mgrExport" class="manager-action manager-primary">Sicherung herunterladen</button><button id="mgrRestore" class="manager-action">Entfernte Karten wiederherstellen</button><label class="manager-action" for="mgrImport" style="cursor:pointer">Sicherung importieren</label><input id="mgrImport" type="file" accept="application/json,.json" hidden></div><p class="manager-muted">Ein Konto und geräteübergreifende Speicherung werden als nächste Ausbaustufe ergänzt.</p></section></div>';
+    dialog.innerHTML = '<div class="manager-inner"><div class="manager-head"><h2>Kartenbibliothek verwalten</h2><button id="managerClose" class="manager-action" type="button" aria-label="Schließen">✕</button></div><div class="manager-tabs"><button id="managerDiscoverTab" class="manager-tab" type="button">Karten entdecken</button><button id="managerMapTab" class="manager-tab" type="button">Karte hinzufügen</button><button id="managerRegionTab" class="manager-tab" type="button">Regionen</button><button id="managerBackupTab" class="manager-tab" type="button">Sicherung</button></div><section id="managerDiscover"><form id="managerDiscoverForm"><label class="manager-label" for="managerDiscoverQuery">Historische Karten nach Ort oder Begriff suchen</label><div style="display:flex;gap:7px"><input id="managerDiscoverQuery" class="manager-search" required minlength="2" maxlength="90" value="Berlin" placeholder="Berlin, Wien, Rom …"><button class="manager-action manager-primary" type="submit">Suchen</button></div></form><p class="manager-muted">Suche in bereits georeferenzierten MapWarper-Karten. Angezeigte Treffer sind externe Angebote; Verfügbarkeit und Nutzungsrechte hängen vom Anbieter ab.</p><div id="managerSearchStatus" class="manager-status" role="status"></div><div id="managerResults" class="manager-results"></div><p class="manager-muted"><a href="https://mapwarper.net/" target="_blank" rel="noopener noreferrer">MapWarper öffnen ↗</a> · Weitere Geoportale werden später angebunden.</p></section><section id="managerMap" class="manager-hidden"><form id="managerMapForm" class="manager-fields"><label class="manager-wide">Kartenname<input id="mgrName" required maxlength="220" placeholder="z. B. Berlin 1910"></label><label>Jahr (optional)<input id="mgrYear" type="number" min="1" max="2100" placeholder="1910"></label><label>Region<select id="mgrRegion"></select></label><label>Kartentyp<select id="mgrType"><option value="xyz">XYZ / WMTS-Kachel-URL</option><option value="tms">TMS-Kachel-URL</option><option value="wms">WMS-Dienst</option></select></label><label>Kartenanbieter<input id="mgrProvider" placeholder="z. B. MapWarper"></label><label class="manager-wide">Kachel-URL oder WMS-Endpunkt<input id="mgrUrl" type="text" required spellcheck="false" placeholder="https://…/{z}/{x}/{y}.png"></label><label class="manager-wide" id="mgrLayerWrap">WMS-Layername<input id="mgrLayer" placeholder="Technischer Name der Kartenebene"></label><label class="manager-wide">Link zur Originalquelle (optional)<input id="mgrDetails" spellcheck="false" placeholder="https://…"></label><div class="manager-actions manager-wide"><button class="manager-action manager-primary" type="submit">Karte speichern</button><button id="mgrDelete" class="manager-action manager-danger manager-hidden" type="button">Karte entfernen</button><button id="mgrCancelEdit" class="manager-action" type="button">Abbrechen</button></div></form><p class="manager-muted">XYZ benötigt {z}, {x}, {y}. WMS benötigt den Layernamen aus „GetCapabilities“. Ein WMS-Server muss die verwendete Projektion EPSG:3857 unterstützen. Änderungen bleiben zunächst nur in diesem Browser gespeichert.</p></section><section id="managerRegion" class="manager-hidden"><form id="managerRegionForm" class="manager-fields"><label class="manager-wide">Neue Region / Ort<input id="mgrRegionName" required maxlength="100" placeholder="z. B. Potsdam"></label><label>Breitengrad<input id="mgrLat" type="number" min="-90" max="90" step="any" placeholder="52.4"></label><label>Längengrad<input id="mgrLon" type="number" min="-180" max="180" step="any" placeholder="13.0"></label><label>Karten-Zoom<input id="mgrZoom" type="number" min="2" max="19" value="12"></label><div class="manager-actions manager-wide"><button class="manager-action" type="button" id="mgrLookupRegion">Koordinaten automatisch suchen</button><button class="manager-action manager-primary" type="submit">Region speichern</button></div></form><p id="mgrRegionStatus" class="manager-status" role="status"></p><div id="mgrRegionList" class="manager-results"></div><p class="manager-muted">Regionen können angelegt, bearbeitet und gelöscht werden. Vor dem Löschen werden zugehörige Karten in eine andere Region verschoben. Berlin bleibt als Startregion erhalten. Für die Ortssuche verwenden wir OpenStreetMap / Nominatim.</p></section><section id="managerBackup" class="manager-hidden"><p class="manager-muted">Änderungen werden derzeit nur auf diesem Gerät gespeichert. Exportiere eine Sicherung, bevor du den Browser wechselst oder lokale Daten löschst. Die Datei enthält deine individuellen Karteneinträge, Regionen und ausgeblendeten Karten.</p><div class="manager-actions"><button id="mgrExport" class="manager-action manager-primary">Sicherung herunterladen</button><button id="mgrRestore" class="manager-action">Entfernte Karten wiederherstellen</button><label class="manager-action" for="mgrImport" style="cursor:pointer">Sicherung importieren</label><input id="mgrImport" type="file" accept="application/json,.json" hidden></div><p class="manager-muted">Ein Konto und geräteübergreifende Speicherung werden als nächste Ausbaustufe ergänzt.</p></section></div>';
     document.body.appendChild(dialog);
     function open(tab) { switchTab(tab || "discover"); if (!dialog.open) dialog.showModal(); }
     function switchTab(tab) {
@@ -215,6 +226,7 @@
     }
     function saveRegion(name, lat, lon, zoom) {
       name = registerRegion(name, lat, lon, zoom);
+      deletedRegions = deletedRegions.filter(function (n) {return n !== name;});
       var data = {name:name,lat:Number(lat),lon:Number(lon),zoom:Number(zoom)};
       var idx = storedRegions.findIndex(function (r) {return r.name === name;});
       if (idx >= 0) storedRegions[idx] = data; else storedRegions.push(data);
@@ -238,20 +250,87 @@
         el("mgrRegionStatus").textContent = "Region „" + name + "“ gespeichert.";
       } catch (e) {el("mgrRegionStatus").textContent = e.message;}
     });
+    function removeRegion(name, target) {
+      if (!regions.includes(name) || ["Alle","Berlin","Favoriten","Weitere","Unbekannt"].includes(name)) return;
+      if (target === name) throw new Error("Bitte eine andere Zielregion auswählen.");
+      var destination = target === "Weitere" ? "Unbekannt" : target;
+      if (!defs[destination]) throw new Error("Die Zielregion existiert nicht mehr.");
+      var affected = maps.filter(function (m) {return m && m.region === name;});
+      affected.forEach(function (m) {
+        m.region = destination;
+        // Original maps cannot be deleted from their source array. Preserve their new
+        // region assignment explicitly as an override in each user's cloud library.
+        if (m.id < defaultCount) overrides[m.id] = sanitizeMap(m);
+      });
+      var ix = regions.indexOf(name);
+      regions.splice(ix, 1);
+      if (baseRegionNames.has(name) && !deletedRegions.includes(name)) deletedRegions.push(name);
+      storedRegions = storedRegions.filter(function (r) {return r && r.name !== name;});
+      delete defs[name];
+      persist();
+      api.setRegionFilter("Alle");
+      redraw(); populateRegions(); renderRegionList();
+      el("mgrRegionStatus").textContent="Region „"+name+"“ gelöscht."+(affected.length ? " "+affected.length+" Karte(n) wurden der gewählten Region zugeordnet." : "");
+      api.setNotice("Region „"+name+"“ entfernt.");
+    }
     function renderRegionList() {
       var wrap = el("mgrRegionList"); wrap.replaceChildren();
       regions.filter(function (r) {return !["Alle","Favoriten","Weitere"].includes(r);}).forEach(function (name) {
         var r = defs[name];
         if (!r) return;
-        var row = node("div","manager-result"), title = node("div");
+        var row = node("div","manager-result manager-region-row"), title = node("div");
         title.append(node("strong","",name),node("small","",r.center[0].toFixed(4)+", "+r.center[1].toFixed(4)+" · Zoom "+r.zoom));
+        var actions = node("div","manager-region-actions");
         var edit = node("button","manager-action","Bearbeiten"); edit.type = "button";
         edit.addEventListener("click",function () {
           el("mgrRegionName").value=name;el("mgrLat").value=r.center[0];el("mgrLon").value=r.center[1];el("mgrZoom").value=r.zoom;
           el("mgrRegionStatus").textContent="Region kann mit neuen Koordinaten aktualisiert werden.";
           el("mgrRegionName").focus();
         });
-        row.append(title,edit);wrap.appendChild(row);
+        actions.appendChild(edit);
+        if (name !== "Berlin") {
+          var del = node("button","manager-action manager-danger","Löschen");
+          del.type = "button";
+          del.setAttribute("aria-label","Region "+name+" löschen");
+          del.addEventListener("click",function () {
+            var old = row.querySelector(".manager-region-confirm");
+            if (old) {old.remove();return;}
+            var affected = maps.filter(function (m) {return m && m.region === name;});
+            if (!affected.length) {
+              if (window.confirm("Region „"+name+"“ wirklich löschen?")) removeRegion(name,"Weitere");
+              return;
+            }
+            // Explicit reassignment prevents removing users' original or custom maps.
+            var panel = node("div","manager-region-confirm");
+            panel.appendChild(node("p","manager-muted",
+              "Die Region enthält "+affected.length+" Karte(n). Die Karten bleiben erhalten. Bitte wähle, welcher Region sie zugeordnet werden sollen."));
+            var label = node("label","manager-label","Karten verschieben nach");
+            var select = node("select","manager-region-target");
+            var options = regions.filter(function (n) {
+              return n !== name && !["Alle","Favoriten","Weitere"].includes(n);
+            });
+            options.push("Weitere");
+            options.forEach(function (n) {
+              var opt = node("option","",n); opt.value=n; select.appendChild(opt);
+            });
+            select.value = ["Spandau","Charlottenburg","Tiergarten","Grunewald"].includes(name) && regions.includes("Berlin") ? "Berlin" : "Weitere";
+            label.appendChild(select); panel.appendChild(label);
+            var buttons = node("div","manager-actions");
+            var confirmDelete = node("button","manager-action manager-danger","Region löschen und Karten verschieben");
+            confirmDelete.type = "button";
+            confirmDelete.addEventListener("click",function () {
+              if (!window.confirm("Region „"+name+"“ löschen und "+affected.length+" Karte(n) nach „"+select.value+"“ verschieben?")) return;
+              try {removeRegion(name,select.value);}
+              catch(e) {el("mgrRegionStatus").textContent=e.message;}
+            });
+            var cancel = node("button","manager-action","Abbrechen");
+            cancel.type = "button";cancel.addEventListener("click",function () {panel.remove();});
+            buttons.append(confirmDelete,cancel);panel.appendChild(buttons);
+            row.appendChild(panel);
+          });
+          actions.appendChild(del);
+        }
+        row.append(title,actions);wrap.appendChild(row);
       });
     }
     // Allmaps Tile Server converts existing IIIF georeference annotations to XYZ tiles.
