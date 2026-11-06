@@ -46,11 +46,6 @@
     var custom = Array.isArray(saved.custom) ? saved.custom : [];
     var overrides = saved.overrides && typeof saved.overrides === "object" ? saved.overrides : {};
     var hidden = new Set(Array.isArray(saved.hidden) ? saved.hidden.filter(Number.isInteger) : []);
-    // Only explicit user actions add overlays; keep this in the per-user cloud library.
-    var geoportalOverlays = Array.isArray(saved.geoportalOverlays)
-      ? saved.geoportalOverlays.filter(function(o){return o&&o.id==="trees"&&
-           window.AtlasGeoportal?.allowedUrl(o.sourceUrl);}).map(function(o){return {id:o.id,sourceUrl:o.sourceUrl};})
-      : [];
 
     function registerRegion(name, lat, lon, zoom) {
       name = String(name || "").trim().slice(0, 100);
@@ -91,6 +86,21 @@
       maps.push(item);
     });
     maps.forEach(function (m, index) { m.id = index; m.hidden = !!m.hidden || hidden.has(index); });
+    // The Berlin tree inventory is a normal selectable map, not a second
+    // permanent overlay. Append it AFTER existing custom maps to preserve IDs,
+    // favorites, shared links and all 44 original maps.
+    var treeUrl="https://gdi.berlin.de/services/wms/baumbestand";
+    var treeWasAdded=false;
+    if(window.AtlasGeoportal &&
+       !maps.some(function(m){return m&&m.sourceUrl===treeUrl&&m.type==="geoportal";})) {
+      var treeMap=sanitizeMap({
+        name:"Baumbestand Berlin · aktuell",region:"Berlin",year:null,
+        sourceUrl:treeUrl,detailUrl:"https://gdi.berlin.de/view/baumbestand",
+        provider:"Geoportal Berlin / Land Berlin",type:"geoportal",layerName:"auto"
+      });
+      treeMap.id=maps.length;treeMap.custom=true;maps.push(treeMap);
+      treeWasAdded=true;
+    }
 
     function sanitizeMap(v) {
       var type = v.type === "geoportal" ? "geoportal" : v.type === "histomap" ? "histomap" : v.type === "wms" ? "wms" : v.type === "tms" ? "tms" : "xyz";
@@ -110,7 +120,7 @@
         version: 2,
         regions: storedRegions,
         deletedRegions: deletedRegions,
-        geoportalOverlays: geoportalOverlays,
+        geoportalOverlays: [], // Legacy overlay mode intentionally disabled.
         custom: maps.slice(defaultCount).map(function (m) {
           return {name:m.name,region:m.region,year:m.year,sourceUrl:m.sourceUrl,detailUrl:m.detailUrl,provider:m.provider,type:m.type,layerName:m.layerName};
         }),
@@ -474,48 +484,13 @@
     var histoNote=node("p","manager-muted");
     histoNote.innerHTML='HistoMap Berlin eignet sich für <strong>grundstücks- und blattgenaue Detailrecherchen</strong>, nicht für einheitliche Gesamtberliner Jahrgänge. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">HistoMap im Original öffnen ↗</a>';
     el("managerDiscover").appendChild(histoNote);
-    function updateGeoportalOverlay(entry, enabled) {
-      if(!entry||entry.id!=="trees")return;
-      if(enabled) {
-        if(!window.AtlasGeoportal?.allowedUrl(entry.sourceUrl))throw new Error("Unbekannter Geodienst.");
-        if(!geoportalOverlays.some(function(o){return o.id===entry.id;}))
-          geoportalOverlays.push({id:entry.id,sourceUrl:entry.sourceUrl});
-      } else {
-        for(var j=geoportalOverlays.length-1;j>=0;j--)
-          if(geoportalOverlays[j].id===entry.id)geoportalOverlays.splice(j,1);
-      }
-      api.setGeoportalOverlay(entry,enabled);
-      persist();
-      reflectTrees();
-    }
-    function reflectTrees(){
-      var b=document.getElementById("treesToggle");
-      if(!b)return;
-      var enabled=geoportalOverlays.some(function(o){return o.id==="trees";});
-      b.setAttribute("aria-pressed",String(enabled));
-      b.title=enabled?"Baumbestand ausblenden":"Baumbestand anzeigen";
-    }
-    async function toggleTrees(){
-      var entry=window.AtlasGeoportal?.services.find(function(o){return o.id==="trees";});
-      if(!entry)return;
-      var btn=document.getElementById("treesToggle");
-      if(btn)btn.disabled=true;
-      try {
-        var enabled=geoportalOverlays.some(function(o){return o.id==="trees";});
-        if(!enabled)await window.AtlasGeoportal.capabilities("https://gdi.berlin.de/services/wms/"+entry.slug);
-        updateGeoportalOverlay({id:"trees",sourceUrl:"https://gdi.berlin.de/services/wms/"+entry.slug},!enabled);
-        api.setNotice(enabled?"Baumbestand ausgeblendet.":"Baumbestand eingeschaltet (bei größerem Kartenzoom sichtbar).",4200);
-      } catch(e) {
-        api.setNotice("Der Baumbestand konnte nicht geladen werden: "+e.message,6500);
-      } finally {if(btn)btn.disabled=false;reflectTrees();}
-    }
     if (window.AtlasGeoportal) window.AtlasGeoportal.mount({
-      parent:el("managerDiscover"),maps:maps,add:upsert,
-      overlayState:geoportalOverlays,updateOverlay:updateGeoportalOverlay
+      parent:el("managerDiscover"),maps:maps,add:upsert
     });
-    geoportalOverlays.forEach(function(entry){api.setGeoportalOverlay(entry,true);});
-    reflectTrees();
-    return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap,toggleTrees:toggleTrees};
+    // Persist the migrated tree card once, including its stable ID.
+    // Other user maps, hidden state and favorites remain unchanged.
+    if(treeWasAdded)persist();
+    return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap};
   }
   window.AtlasManager = {mount:mount};
 }());
