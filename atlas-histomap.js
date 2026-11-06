@@ -3,7 +3,7 @@
 "use strict";
 const SERVICE="https://histomapberlin.de:8443/geoserver/histomap/wms";
 const HOME="https://histomapberlin.de/";
-const CACHE_KEY="atlas-histomap-capabilities-v3";
+const CACHE_KEY="atlas-histomap-capabilities-v4-works";
 const CACHE_AGE=5*24*60*60*1000;
 let catalogData=null,loading=null;
 const $=(n,id)=>n.querySelector("#"+id);
@@ -25,6 +25,45 @@ function boundsFor(layer){
   }
   return null;
 }
+function identifyWork(name,title) {
+ const full=(String(name)+" "+String(title)).replace(/[_./:;\\-]+/g," ").replace(/\s+/g," ");
+ const norm=full.toLowerCase();
+ let base=null,label=null;
+ if(/(?:^|\W)k\s*4(?!\d)/i.test(full)||/1\s*:\s*4[.,]?000\b/.test(full)) {
+   base="K4";label="K4 · Stadtplan 1:4.000";
+ } else if(/(?:^|\W)k\s*5(?!\d)/i.test(full)||/1\s*:\s*5[.,]?000\b/.test(full)){
+   base="K5";label="K5 · Karte 1:5.000";
+ } else if(/straube/i.test(full)){
+   base="Straube";label="Straube-Plan";
+ }
+ // Do not combine colour and monochrome editions inadvertently.
+ if(base){
+   if(/(?:^|\W)(?:farb\w*|colour|color|koloriert)(?:\W|$)/i.test(norm)){
+     base+="-Farbe";label+=" · Farbe";
+   } else if(/schwarz\s*weiß|schwarz\s*weiss|(?:^|\W)s\s*w(?:\W|$)|monochrom/i.test(norm)){
+     base+="-SW";label+=" · Schwarzweiß";
+   }
+   return {key:base,label:label};
+ }
+ // No explicit map-series metadata: keep an individual map separate,
+ // never assume that matching years mean the same cartographic work.
+ return {key:"sheet:"+String(name).slice(0,180),label:String(title||name).slice(0,110)};
+}
+function availableWorks(data,year,center){
+ const atPoint=data.items.filter(item=>item.year===year&&
+   (!Array.isArray(item.box)||coversPoint(item.box,center.lat,center.lng)));
+ const hasLocated=data.items.some(item=>Array.isArray(item.box));
+ const filtered=hasLocated?atPoint.filter(item=>Array.isArray(item.box)):atPoint;
+ const groups=new Map();
+ for(const item of filtered){
+   if(!groups.has(item.work))groups.set(item.work,{key:item.work,label:item.workLabel,local:0,total:0});
+   groups.get(item.work).local++;
+ }
+ for(const item of data.items){
+   if(item.year===year&&groups.has(item.work))groups.get(item.work).total++;
+ }
+ return [...groups.values()].sort((a,b)=>a.label.localeCompare(b.label,"de"));
+}
 function parseCatalog(raw){
  if(raw.length>16000000)throw Error("HistoMap-Katalog zu groß.");
  const doc=new DOMParser().parseFromString(raw,"application/xml");
@@ -38,7 +77,9 @@ function parseCatalog(raw){
   const found=(name+" "+title).match(/(?:18[6-9]\d|19\d{2}|20[0-2]\d)/g);
   if(!found)continue;
   unique.add(name);
-  items.push({name,title,year:Number(found[found.length-1]),box:boundsFor(layer)});
+  const work=identifyWork(name,title);
+  items.push({name,title,year:Number(found[found.length-1]),box:boundsFor(layer),
+    work:work.key,workLabel:work.label});
  }
  if(!items.length)throw Error("Der Dienst hat keine datierten Blattebenen geliefert.");
  const crs=Array.from(doc.getElementsByTagNameNS("*","SRS"))
@@ -104,8 +145,12 @@ function mapImageURL(names,bounds,L,size){
  });
  return SERVICE+"?"+params.toString();
 }
-function createFullYearLayer(L,year,onError){
+function createFullYearLayer(L,year,onError,selection){
  const yr=Number(year);
+ // Legacy entries saved a bare year; keep those intact. New entries
+ // store year|work, so maps of a different series cannot overlap.
+ const filter=(typeof selection==="string"&&selection.startsWith(String(yr)+"|"))
+   ?selection.slice(String(yr).length+1):null;
  let notified=false;
  function notify(message){
   if(notified)return;
@@ -127,7 +172,7 @@ function createFullYearLayer(L,year,onError){
    if(!data.compatible){done(null,tile);return tile;}
    const b=this._tileCoordsToBounds(coords);
    const area={west:b.getWest(),south:b.getSouth(),east:b.getEast(),north:b.getNorth()};
-   const names=data.items.filter(item=>item.year===yr&&overlaps(item.box,area)).map(item=>item.name);
+   const names=data.items.filter(item=>item.year===yr&&(!filter||item.work===filter)&&overlaps(item.box,area)).map(item=>item.name);
    if(!names.length){done(null,tile);return tile;}
    // A year is a city-wide virtual map. At every tile position retrieve
    // every applicable source sheet; no six-sheet import truncation.
@@ -167,10 +212,37 @@ function mount({parent,map,maps,add}){
  css.textContent=".histo-box{margin:0 0 14px;border:1px solid #c5d9c9;border-radius:12px;background:#f3f8f2;padding:13px}.histo-box summary{font-size:13px;font-weight:800;color:#225040;cursor:pointer}.histo-box p{font-size:12px;line-height:1.45;color:#607367}.histo-box select,.histo-box button{box-sizing:border-box;width:100%;margin:6px 0;padding:10px;border:1px solid #bed3c3;border-radius:9px;background:white;color:#254b3c;font-size:13px}.histo-box button{font-weight:750}.histo-box button.primary{background:#245040;color:white}.histo-box button:disabled{opacity:.5}.histo-box input[type=file]{font-size:12px;max-width:100%;margin:9px 0}.histo-box label{font-size:12px;font-weight:650}";
  document.head.appendChild(css);
  const box=elm("details",undefined,"histo-box");
- box.innerHTML='<summary>HistoMap Berlin · historische Kartenwerke</summary><p>Die Jahresliste zeigt nur historische Karten, die am Mittelpunkt deiner Karte vorhanden sind. Beim Hinzufügen erhältst du dagegen den <strong>gesamten Berliner Jahrgang</strong>: Beim Verschieben werden passende Blätter automatisch nachgeladen.</p><button id="hmLoad" type="button">Kartenbestand aktualisieren</button><label for="hmYear">Verfügbare Jahre an diesem Ort</label><select id="hmYear" disabled><option>Bestand wird geladen …</option></select><button id="hmAdd" class="primary" type="button" disabled>Gesamten Berliner Jahrgang hinzufügen</button><p id="hmStatus" role="status">Noch nicht verbunden.</p><p>© Landesarchiv Berlin, HistoMap Berlin. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">Originalkarten ansehen</a></p><label for="hmXml">Falls der WMS-Zugriff scheitert: Kartenkatalogdatei (XML)</label><input id="hmXml" type="file" accept=".xml,application/xml,text/xml">';
+ box.innerHTML='<summary>HistoMap Berlin · historische Kartenwerke</summary><p>Wähle zuerst ein Jahr und dann das Kartenwerk, das an dieser Stelle verfügbar ist. Beim Hinzufügen übernimmt der Atlas <strong>alle Berliner Blätter dieses Kartenwerks und Jahrgangs</strong> und lädt beim Verschieben automatisch weitere Blätter nach.</p><button id="hmLoad" type="button">Kartenbestand aktualisieren</button><label for="hmYear">1. Verfügbare Jahre an diesem Ort</label><select id="hmYear" disabled><option>Bestand wird geladen …</option></select><label for="hmWork">2. Kartenwerk auswählen</label><select id="hmWork" disabled><option>Bitte zuerst ein Jahr auswählen</option></select><button id="hmAdd" class="primary" type="button" disabled>Gewähltes Kartenwerk für ganz Berlin hinzufügen</button><p id="hmStatus" role="status">Noch nicht verbunden.</p><p>© Landesarchiv Berlin, HistoMap Berlin. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">Originalkarten ansehen</a></p><label for="hmXml">Falls der WMS-Zugriff scheitert: Kartenkatalogdatei (XML)</label><input id="hmXml" type="file" accept=".xml,application/xml,text/xml">';
  parent.prepend(box);
  const get=id=>$(box,id);
  let data=null;
+ function updateWork(){
+  if(!data)return;
+  const year=Number(get("hmYear").value);
+  const select=get("hmWork"),before=select.value;
+  const works=availableWorks(data,year,map.getCenter());
+  select.replaceChildren();
+  for(const work of works){
+   const option=elm("option",work.label+" · "+work.local+" Blatt/Blätter hier");
+   option.value=work.key;select.appendChild(option);
+  }
+  if(works.some(w=>w.key===before))select.value=before;
+  const found=works.find(w=>w.key===select.value);
+  select.disabled=!found;
+  get("hmAdd").disabled=!found||!data.compatible;
+  if(!found){
+   get("hmStatus").textContent="Für diesen Jahrgang gibt es hier kein zugeordnetes Kartenwerk.";
+   return;
+  }
+  const key=String(year)+"|"+found.key;
+  const already=maps.some(m=>m&&!m.hidden&&m.type==="histomap"&&m.sourceUrl===SERVICE&&m.year===year&&m.layerName===key);
+  get("hmAdd").disabled=already||!data.compatible;
+  get("hmAdd").textContent=already?"Bereits in deiner Kartenbibliothek":"Gewähltes Kartenwerk für ganz Berlin hinzufügen";
+  get("hmStatus").textContent=data.compatible?
+   works.length+" Kartenwerk(e) im Jahr "+year+" hier verfügbar. "+
+   found.total+" zugehörige Berliner Blätter im Katalog; "+found.local+" davon an dieser Stelle.":
+   "Der WMS bestätigt keine EPSG:3857-Unterstützung. Eine korrekte Überlagerung ist nicht gesichert.";
+ }
  function updateYears(){
   if(!data)return;
   const middle=map.getCenter();
@@ -182,17 +254,15 @@ function mount({parent,map,maps,add}){
   }
   if(!available.length){
     select.appendChild(elm("option","Hier keine datierten Kartenblätter"));
-    select.disabled=true;get("hmAdd").disabled=true;
-    get("hmStatus").textContent="An diesem Kartenmittelpunkt sind keine datierten HistoMap-Blätter verzeichnet. Kartenansicht verschieben, dann erneut öffnen.";
+    select.disabled=true;get("hmWork").disabled=true;
+    get("hmWork").replaceChildren();
+    get("hmAdd").disabled=true;
+    get("hmStatus").textContent="An diesem Kartenmittelpunkt sind keine datierten HistoMap-Blätter verzeichnet. Karte verschieben und erneut öffnen.";
     return;
   }
   select.value=String(available.includes(was)?was:available.includes(1910)?1910:available[0]);
   select.disabled=false;
-  get("hmAdd").disabled=!data.compatible;
-  const all=data.items.filter(x=>x.year===Number(select.value)).length;
-  get("hmStatus").textContent=data.compatible?
-    available.length+" Jahrgänge an dieser Stelle verfügbar. "+all+" Blätter des ausgewählten Jahres sind berlinweit im Katalog. Beim Zoomen werden nur die sichtbaren geladen.":
-    "Der WMS bestätigt keine EPSG:3857-Unterstützung. Ein korrektes Kartenoverlay lässt sich hier nicht aktivieren.";
+  updateWork();
  }
  async function refresh(force){
   get("hmLoad").disabled=true;
@@ -206,7 +276,8 @@ function mount({parent,map,maps,add}){
   }finally{get("hmLoad").disabled=false;}
  }
  get("hmLoad").addEventListener("click",()=>refresh(true));
- get("hmYear").addEventListener("change",updateYears);
+ get("hmYear").addEventListener("change",updateWork);
+ get("hmWork").addEventListener("change",updateWork);
  box.addEventListener("toggle",()=>{if(!box.open)return;if(data)updateYears();else refresh(false);});
  map.on("moveend",()=>{if(box.open&&data)updateYears();});
  get("hmXml").addEventListener("change",async event=>{
@@ -217,20 +288,22 @@ function mount({parent,map,maps,add}){
  });
  get("hmAdd").addEventListener("click",()=>{
   if(!data?.compatible)return;
-  const year=Number(get("hmYear").value);
-  if(!Number.isInteger(year))return;
-  if(maps.some(m=>m&&!m.hidden&&m.type==="histomap"&&m.sourceUrl===SERVICE&&m.year===year)){
-   get("hmStatus").textContent="Dieser gesamte Berliner Jahrgang ist bereits in deiner Bibliothek.";return;
+  const year=Number(get("hmYear").value),work=get("hmWork").value;
+  const valid=availableWorks(data,year,map.getCenter()).find(x=>x.key===work);
+  if(!Number.isInteger(year)||!valid)return;
+  const storedKey=String(year)+"|"+work;
+  if(maps.some(m=>m&&!m.hidden&&m.type==="histomap"&&m.sourceUrl===SERVICE&&m.year===year&&m.layerName===storedKey)){
+   get("hmStatus").textContent="Dieses Kartenwerk ist bereits in deiner Bibliothek.";return;
   }
   try{
-   add({name:"HistoMap Berlin "+year+" · Gesamtberlin",year,region:"Berlin",
-    sourceUrl:SERVICE,type:"histomap",layerName:String(year),
+   add({name:"HistoMap Berlin "+year+" · "+valid.label,
+    year,region:"Berlin",sourceUrl:SERVICE,type:"histomap",layerName:storedKey,
     provider:"Landesarchiv Berlin / HistoMap Berlin",detailUrl:HOME},null);
-   get("hmStatus").textContent="Der Berliner Jahrgang "+year+" wurde gespeichert.";
+   get("hmStatus").textContent="Kartenwerk „"+valid.label+"“ von "+year+" mit allen Berliner Blättern gespeichert.";
    box.closest("dialog")?.close();
    document.getElementById("sidebar")?.classList.remove("open");
   }catch(e){get("hmStatus").textContent="Übernahme fehlgeschlagen: "+e.message;}
  });
 }
-window.AtlasHistoMap={mount,createFullYearLayer,loadCatalogue,getCachedCatalog:fromCache,parseCatalog,yearsAt};
+window.AtlasHistoMap={mount,createFullYearLayer,loadCatalogue,getCachedCatalog:fromCache,parseCatalog,yearsAt,identifyWork,availableWorks};
 })();
