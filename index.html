@@ -242,10 +242,14 @@
     .opacity-popover .field-head{margin-bottom:12px}
     .opacity-popover input{display:block;width:100%;height:26px;touch-action:pan-x}
     .tools-menu .tool-icon[aria-pressed="true"]{background:rgba(35,88,66,.27)!important;box-shadow:inset 0 0 0 2px rgba(35,88,66,.25)!important}
-    .tree-popup{font-size:12px;color:#294435;min-width:195px;max-width:300px}
+    #historicalMap .leaflet-popup-pane{z-index:1200;pointer-events:auto!important}
+    #historicalMap .leaflet-popup-pane *{pointer-events:auto!important}
+    #historicalMap .leaflet-popup-content-wrapper{background:#fff!important;opacity:1!important;box-shadow:0 8px 28px rgba(0,0,0,.25);border-radius:14px}
+    #historicalMap .leaflet-popup-content{max-height:min(55dvh,450px);overflow-y:auto;overflow-x:hidden;margin:15px 17px!important;box-sizing:border-box}
+    .tree-popup{font-size:12px;color:#294435;min-width:0;max-width:300px;width:100%;overflow-wrap:anywhere}
     .tree-popup>strong{display:block;font-size:15px;margin-bottom:10px}
     .tree-popup p{line-height:1.5;margin:7px 0}
-    .tree-properties{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px 10px;max-height:270px;overflow:auto;margin:6px 0 11px;align-items:start}
+    .tree-properties{display:grid;grid-template-columns:minmax(0,42%) minmax(0,58%);gap:7px 8px;margin:8px 0 11px;align-items:start;width:100%}
     .tree-properties dt{color:#68756d;font-size:11px;overflow-wrap:anywhere}
     .tree-properties dd{margin:0;font-weight:650;overflow-wrap:anywhere}
     .tree-popup>a{display:block;color:#20624b;margin-top:9px}
@@ -625,13 +629,13 @@
         const serial=++treeQuerySerial;
         const waiting=document.createElement('div');waiting.textContent='Baumdaten werden abgerufen …';
         const popup=L.popup({maxWidth:325,minWidth:215,closeButton:true})
-          .setLatLng(event.latlng).setContent(waiting).openOn(map);
+          .setLatLng(event.latlng).setContent(waiting).openOn(historicalMap);
         try{
           const result=await window.AtlasGeoportal.getTreeInfo(map,L,event.latlng);
-          if(serial!==treeQuerySerial||!map.hasLayer(popup))return;
+          if(serial!==treeQuerySerial||!historicalMap.hasLayer(popup))return;
           popup.setContent(treePopup(result));popup.update();
         }catch(e){
-          if(serial!==treeQuerySerial||!map.hasLayer(popup))return;
+          if(serial!==treeQuerySerial||!historicalMap.hasLayer(popup))return;
           popup.setContent(treePopup({error:e.message}));popup.update();
         }
       });
