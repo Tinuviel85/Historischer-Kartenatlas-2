@@ -224,13 +224,13 @@ async function getTreeInfo(map,L,latlng){
  }catch(e){error=error||e;}
  return {properties:null,source:"Geoportal Berlin",error:error?.message||null};
 }
-function mount({parent,maps,add,overlayState=[],updateOverlay}){
+function mount({parent,maps,add}){
  if(!parent||!add)return;
  const style=document.createElement("style");
  style.textContent=".gdi-catalog{border:1px solid #c4d8c8;border-radius:13px;background:#f3f8f4;margin-bottom:14px;padding:12px}.gdi-catalog summary{font-size:14px;font-weight:800;color:#214b3c;cursor:pointer}.gdi-catalog p{font-size:12px;color:#617568;line-height:1.5}.gdi-group{font-weight:800;margin:13px 0 7px;color:#355b47;font-size:12px}.gdi-entry{display:flex;gap:9px;align-items:center;justify-content:space-between;border:1px solid #dce8de;border-radius:10px;background:white;margin:7px 0;padding:10px}.gdi-entry strong{display:block;font-size:12px;color:#284434}.gdi-entry small{display:block;font-size:11px;color:#62786b;margin-top:4px}.gdi-entry button{font-size:12px;font-weight:750;padding:9px;border-radius:9px;border:1px solid #bdd0c2;background:#245544;color:white;flex:none}.gdi-entry button:disabled{opacity:.65}.gdi-status{font-size:11px;line-height:1.4;color:#4c6d59;margin:7px 0}.gdi-entry a{font-size:11px;color:#2b684f}.gdi-check{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;white-space:nowrap}";
  document.head.appendChild(style);
  const wrap=document.createElement("details");wrap.className="gdi-catalog";
- wrap.innerHTML='<summary>Geoportal Berlin · Luftbilder, Karten &amp; Bäume</summary><p>Amtliche Berliner Geodaten in wenigen Schritten übernehmen. Luftbilder und Karten werden als eigene Karten gespeichert; der aktuelle Baumbestand ist eine zusätzliche Ebene, die du ein- und ausschalten kannst.</p><div id="gdiItems"></div><p class="gdi-status" id="gdiStatus" role="status"></p><p><a href="https://gdi.berlin.de/" target="_blank" rel="noopener noreferrer">Offizielles Geoportal Berlin öffnen</a> · <a href="https://daten.berlin.de/" target="_blank" rel="noopener noreferrer">Daten und Lizenzen</a></p>';
+ wrap.innerHTML='<summary>Geoportal Berlin · Luftbilder, Karten &amp; Bäume</summary><p>Amtliche Berliner Geodaten in wenigen Schritten übernehmen. Jede Quelle wird als eigenständige Karte in deiner Kartenauswahl geführt – auch der heutige Baumbestand. Beim Kartenwechsel wird die bisherige Karte vollständig ersetzt.</p><div id="gdiItems"></div><p class="gdi-status" id="gdiStatus" role="status"></p><p><a href="https://gdi.berlin.de/" target="_blank" rel="noopener noreferrer">Offizielles Geoportal Berlin öffnen</a> · <a href="https://daten.berlin.de/" target="_blank" rel="noopener noreferrer">Daten und Lizenzen</a></p>';
  parent.prepend(wrap);
  const listing=wrap.querySelector("#gdiItems"),status=wrap.querySelector("#gdiStatus");
  const refreshes=[];
@@ -246,7 +246,6 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
   detail.append(title,desc,orig);
   const button=document.createElement("button");button.type="button";
   function alreadyMap(){return maps.some(m=>m&&!m.hidden&&m.sourceUrl===urlFor(entry.id)&&m.type==="geoportal");}
-  function overlayActive(){return overlayState.some(o=>o&&o.id===entry.id);}
   function refreshButton(){
    if(entry.indexOnly){
      button.textContent="Nur Nachweis";
@@ -254,8 +253,8 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
      button.title="Dieser WMS-Dienst zeigt die Lage der Aufnahmen, aber keine Luftbild-Rasterebene.";
      return;
    }
-   button.textContent=entry.overlay?(overlayActive()?"Ausblenden":"Einblenden"):(alreadyMap()?"Vorhanden":"+ Hinzufügen");
-   button.disabled=!entry.overlay&&alreadyMap();
+   button.textContent=alreadyMap()?"In Kartenliste": "+ Hinzufügen";
+   button.disabled=alreadyMap();
   }
   refreshes.push(refreshButton);
   refreshButton();
@@ -263,22 +262,13 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
    if(entry.indexOnly)return;
    button.disabled=true;button.textContent="Verbinde …";status.textContent="Prüfe Kartendienst "+entry.title+" …";
    try{
-    if(entry.overlay&&overlayActive()){
-      updateOverlay(entry,false);status.textContent="Baumbestand ausgeblendet.";
-    }else{
-      await capabilities(urlFor(entry.id));
-      if(entry.overlay){
-        updateOverlay({...entry,sourceUrl:urlFor(entry.id)},true);
-        status.textContent="Baumbestand als separate Ebene eingeschaltet. Die Anzeige beginnt beim Hineinzoomen.";
-      }else{
-        add({name:entry.title,year:entry.year,region:"Berlin",sourceUrl:urlFor(entry.id),
-          type:"geoportal",layerName:"auto",detailUrl:"https://gdi.berlin.de/view/"+entry.slug,
-          provider:"Geoportal Berlin / Land Berlin"},null);
-        status.textContent="Amtliche Karte wurde deiner Bibliothek hinzugefügt.";
-        wrap.closest("dialog")?.close();
-        document.getElementById("sidebar")?.classList.remove("open");
-      }
-    }
+     await capabilities(urlFor(entry.id));
+     add({name:entry.title,year:entry.year,region:"Berlin",sourceUrl:urlFor(entry.id),
+       type:"geoportal",layerName:"auto",detailUrl:"https://gdi.berlin.de/view/"+entry.slug,
+       provider:"Geoportal Berlin / Land Berlin"},null);
+     status.textContent="Karte zur gemeinsamen Kartenliste hinzugefügt.";
+     wrap.closest("dialog")?.close();
+     document.getElementById("sidebar")?.classList.remove("open");
    }catch(e){
     status.textContent="Die Karte konnte nicht automatisch übernommen werden ("+
       (e.name==="AbortError"?"Zeitüberschreitung":e.message)+"). Über „Originalquelle“ kannst du sie im Geoportal ansehen.";
