@@ -187,16 +187,9 @@ function mount({parent,maps,add,capabilities}){
   const layerBox=node("div",null,"catalog-layers");layerBox.hidden=true;
   const external=node("a","Quelle");external.href="https://gdi.berlin.de/view/"+entry.url.slice(BASE.length);
   external.target="_blank";external.rel="noopener noreferrer";
-  const serviceMetadata=metadataDetails("Alle Metadaten · "+(entry.metadata?.length||0)+" Angaben",
-   entry.metadata||[],entry.metadataXml||null,"berlin-geodaten-metadaten.xml");
-  const metadataId=String(entry.recordId||"").trim();
-  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(metadataId)){
-    const officialMeta=node("a","Metadatensatz im amtlichen Katalog");
-    officialMeta.href="https://gdi.berlin.de/geonetwork/srv/ger/catalog.search#/metadata/"+metadataId;
-    officialMeta.target="_blank";officialMeta.rel="noopener noreferrer";
-    serviceMetadata.appendChild(officialMeta);
-  }
-  row.append(t,desc,serviceMetadata,open,external,layerBox);results.appendChild(row);
+  // The user inspects object attributes by tapping the loaded map.
+  // Keep discovery focused on choosing layers, not massive metadata panels.
+  row.append(t,desc,open,external,layerBox);results.appendChild(row);
   open.addEventListener("click",async()=>{
    if(!layerBox.hidden){layerBox.hidden=true;open.textContent="Kartenebenen anzeigen";return;}
    open.disabled=true;open.textContent="Lade Ebenen …";
@@ -235,9 +228,7 @@ function mount({parent,maps,add,capabilities}){
         document.getElementById("sidebar")?.classList.remove("open");
        }catch(e){setStatus("Karte konnte nicht hinzugefügt werden: "+e.message);}
       });
-      const layerMeta=metadataDetails("Alle Ebenen-Metadaten anzeigen",
-        layerFields(layer,entry),null,null);
-      row.append(label,addButton,layerMeta);container.append(row);
+      row.append(label,addButton);container.append(row);
      }
      if(layers.length>100&&!q)container.prepend(node("p","100 Ebenen sichtbar – über das Suchfeld weitere finden.","gdi-small"));
      if(!selection.length)container.append(node("p","Keine passenden Kartenebenen.","gdi-small"));
