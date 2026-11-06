@@ -93,102 +93,57 @@ function wmsImage(names,bounds,L,size){
 }
 function createLayer(L,url,onError,options={}){
  if(!allowedUrl(url))throw Error("Unbekannter Geoportal-Dienst.");
- const overlay=!!options.overlay,minZoom=overlay?12:2;
- let notified=false;
- function warn(message){if(!notified){notified=true;onError?.(message);}}
- // IMPORTANT: A Geoportal-WMS is not a mosaic of 256px Leaflet tiles.
- // Previous code issued many GetMap requests and combined them with
- // asynchronous tile promises: missing/late responses created square holes.
- // Request a single view-sized image, which WMS generates and aligns itself.
- const ViewWMS=L.Layer.extend({
+ const service=serviceForUrl(url);
+ if(service?.indexOnly)throw Error("Dieser Dienst enthält lediglich Bildmitten oder Blattschnitte.");
+ // Leaflet's native WMS tiles have the SAME lifecycle as MapWarper tiles:
+ // setOpacity() works, removeLayer() cancels tiles and selection never
+ // leaves previous viewport images behind. The old image-overlay implementation
+ // did not support setOpacity() and could leave provisional images on the map.
+ const StandardWMS=L.Layer.extend({
+  initialize:function(){
+   this._opacity=1;this._generation=0;this._inner=null;this._map=null;
+  },
   onAdd:function(map){
    this._map=map;
-   this._images=[];
-   this._sequence=0;
-   this._updateTimer=null;
-   map.on("moveend zoomend resize",this._schedule,this);
-   this._schedule();
+   const sequence=++this._generation;
+   capabilities(url).then(info=>{
+     if(!this._map||this._map!==map||sequence!==this._generation)return;
+     const layers=selectedWmsLayers(url,info).map(x=>x.name);
+     if(!layers.length)throw Error("Keine darstellbaren Kartenebenen vorhanden.");
+     const tile=L.tileLayer.wms(url,{
+       layers:layers.join(","),format:"image/png",transparent:true,version:"1.1.1",
+       minZoom:2,maxZoom:19,keepBuffer:2,updateWhenIdle:true,
+       updateWhenZooming:false,opacity:this._opacity,noWrap:true
+     });
+     tile.on("tileerror",()=>{
+       if(sequence===this._generation&&!this._tileErrorShown){
+         this._tileErrorShown=true;
+         onError?.("Der Berliner Kartendienst konnte einzelne Kartenbilder nicht liefern.");
+       }
+     });
+     if(sequence!==this._generation||!this._map)return;
+     this._inner=tile;tile.addTo(map);
+   }).catch(err=>{
+     if(sequence===this._generation&&this._map)
+       onError?.("Geoportal Berlin: "+err.message);
+   });
   },
   onRemove:function(map){
-   map.off("moveend zoomend resize",this._schedule,this);
-   clearTimeout(this._updateTimer);
-   this._sequence++;
-   this._images.forEach(layer=>{if(map.hasLayer(layer))map.removeLayer(layer);});
-   this._images=[];
+   ++this._generation;
+   if(this._inner){
+     if(map.hasLayer(this._inner))map.removeLayer(this._inner);
+     this._inner=null;
+   }
    this._map=null;
   },
-  _schedule:function(){
-   clearTimeout(this._updateTimer);
-   this._updateTimer=setTimeout(()=>this._update(),90);
+  setOpacity:function(value){
+   this._opacity=Math.max(0,Math.min(1,Number(value)));
+   if(this._inner)this._inner.setOpacity(this._opacity);
+   return this;
   },
-  _update:async function(){
-   const map=this._map;if(!map)return;
-   const seq=++this._sequence;
-   if(map.getZoom()<minZoom){
-     this._images.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
-     this._images=[];return;
-   }
-   let info;
-   try{info=await capabilities(url);}
-   catch(e){if(seq===this._sequence)warn("Geoportal Berlin antwortet nicht: "+e.message);return;}
-   if(seq!==this._sequence||!this._map)return;
-   const bounds=map.getBounds(),size=map.getSize();
-   if(!size.x||!size.y)return;
-   // Never request a whole WMS group: it overlays the red image-centre
-   // and footprint index layers on the actual photographic imagery.
-   const batches=selectedWmsLayers(url,info).map(x=>[x.name]);
-   if(!batches.length){this._images.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});this._images=[];return;}
-   // Max image dimensions protect phones and meet common WMS server limits.
-   const factor=Math.min(1,1700/Math.max(size.x,size.y));
-   const px=L.point(Math.max(1,Math.round(size.x*factor)),Math.max(1,Math.round(size.y*factor)));
-   const request=names=>url+"?"+wmsImage(names,bounds,L,px).toString();
-   const self=this;
-   async function receive(names){
-     return new Promise(resolve=>{
-       const layer=L.imageOverlay(request(names),bounds,{interactive:false,opacity:1});
-       let finished=false;
-       const timer=setTimeout(()=>finish(false),14000);
-       function finish(ok){
-         if(finished)return;
-         finished=true;clearTimeout(timer);
-         layer.off("load",loaded);layer.off("error",failed);
-         if(!ok&&map.hasLayer(layer))map.removeLayer(layer);
-         resolve(ok?layer:null);
-       }
-       const loaded=()=>finish(true),failed=()=>finish(false);
-       layer.once("load",loaded);
-       layer.once("error",failed);
-       // Preserve older images until replacement is ready.
-       layer.addTo(map);
-     });
-   }
-   let images=[];
-   for(const names of batches){
-     if(seq!==this._sequence||!this._map)break;
-     let layer=await receive(names);
-     if(!layer&&names.length>1){
-       // Some services reject multi-layer requests. Try single layers.
-       for(const name of names){
-         if(seq!==this._sequence)break;
-         const single=await receive([name]);
-         if(single)images.push(single);
-       }
-     }else if(layer)images.push(layer);
-   }
-   if(seq!==this._sequence||!this._map){
-     images.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
-     return;
-   }
-   if(images.length){
-     const old=this._images;
-     this._images=images;
-     old.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
-   } else {
-     warn("Der Berliner WMS konnte für diesen Kartenausschnitt kein Bild liefern. Teilweise fehlen historische Originalaufnahmen.");
-   }
-  }
+  getOpacity:function(){return this._opacity;}
  });
- return new ViewWMS();
+ return new StandardWMS();
 }
 const TREE_WFS="https://gdi.berlin.de/services/wfs/baumbestand";
 let treeTypeNames=null,treeLookup=null;
