@@ -84,7 +84,11 @@ function overlaps(box,b){
 }
 function yearsAt(data,center){
  const years=new Set();
+ // Only known sheet footprints can establish availability at a point.
+ // Unknown footprints must not make all years appear available everywhere.
+ const hasLocatedSheets=data.items.some(item=>Array.isArray(item.box));
  for(const item of data.items){
+  if(hasLocatedSheets&&!Array.isArray(item.box))continue;
   if(coversPoint(item.box,center.lat,center.lng))years.add(item.year);
  }
  return [...years].sort((a,b)=>a-b);
@@ -102,6 +106,12 @@ function mapImageURL(names,bounds,L,size){
 }
 function createFullYearLayer(L,year,onError){
  const yr=Number(year);
+ let notified=false;
+ function notify(message){
+  if(notified)return;
+  notified=true;
+  if(typeof onError==="function")onError(message);
+ }
  const Mosaic=L.GridLayer.extend({
   createTile:function(coords,done){
    const tile=document.createElement("div"),size=this.getTileSize();
@@ -111,7 +121,7 @@ function createFullYearLayer(L,year,onError){
      loadCatalogue().then(res=>{
        if(!res.compatible)throw Error("WMS unterstützt die Kartenprojektion EPSG:3857 nicht.");
        if(this._map)this.redraw();
-     }).catch(err=>{if(typeof onError==="function")onError("HistoMap konnte nicht geladen werden: "+err.message);});
+     }).catch(err=>{notify("HistoMap konnte nicht geladen werden: "+err.message);});
      done(null,tile);return tile;
    }
    if(!data.compatible){done(null,tile);return tile;}
@@ -130,7 +140,7 @@ function createFullYearLayer(L,year,onError){
    function complete(){
      remaining-=1;
      if(remaining===0){
-       if(errors===urls.length&&typeof onError==="function")onError("HistoMap-Kartenbilder konnten hier nicht geladen werden.");
+       if(errors===urls.length)notify("HistoMap-Kartenbilder konnten hier nicht geladen werden.");
        done(null,tile);
      }
    }
