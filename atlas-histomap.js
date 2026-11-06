@@ -179,36 +179,54 @@ function createFullYearLayer(L,year,onError,selection){
    const area={west:b.getWest(),south:b.getSouth(),east:b.getEast(),north:b.getNorth()};
    const names=data.items.filter(item=>item.year===yr&&(!filter||item.work===filter)&&overlaps(item.box,area)).map(item=>item.name);
    if(!names.length){done(null,tile);return tile;}
-   // A year is a city-wide virtual map. At every tile position retrieve
-   // every applicable source sheet; no six-sheet import truncation.
-   // Small WMS batches avoid excessive GET URL lengths.
-   const batchSize=10,urls=[];
-   for(let i=0;i<names.length;i+=batchSize){
-     urls.push(mapImageURL(names.slice(i,i+batchSize),b,L,size));
+   // Only the WMS sheets intersecting this tile are requested. A failed
+   // combined GetMap is retried in smaller groups, down to single sheets.
+   // This avoids losing the whole tile when GeoServer rejects a long LAYERS list.
+   const batchSize=5, jobs=[];
+   function requestImage(names,order){
+     return new Promise(resolve=>{
+       const img=document.createElement("img");
+       img.alt="";img.draggable=false;
+       img.style.cssText="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block;z-index:"+order;
+       let settled=false;
+       const timeout=setTimeout(()=>finish(false),16000);
+       function finish(ok){
+         if(settled)return;
+         settled=true;clearTimeout(timeout);img.onload=null;img.onerror=null;
+         if(!ok){img.remove();img.src="";}
+         resolve(ok);
+       }
+       img.onload=()=>finish(true);
+       img.onerror=()=>finish(false);
+       tile.appendChild(img);
+       img.src=mapImageURL(names,b,L,size);
+     });
    }
-   let remaining=urls.length,errors=0;
-   function complete(){
-     remaining-=1;
-     if(remaining===0){
-       if(errors===urls.length)notify("HistoMap-Kartenbilder konnten hier nicht geladen werden.");
-       done(null,tile);
-     }
+   async function resilientBatch(batch,order){
+     const ok=await requestImage(batch,order);
+     if(ok)return true;
+     if(batch.length===1)return false;
+     const cut=Math.ceil(batch.length/2);
+     const outcomes=await Promise.all([
+       resilientBatch(batch.slice(0,cut),order),
+       resilientBatch(batch.slice(cut),order+cut)
+     ]);
+     return outcomes.some(Boolean);
    }
-   urls.forEach((url,i)=>{
-     const img=document.createElement("img");
-     img.alt="";
-     img.draggable=false;
-     img.style.cssText="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block";
-     img.style.zIndex=String(i);
-     img.onload=complete;
-     img.onerror=()=>{img.remove();errors++;complete();};
-     tile.appendChild(img);
-     img.src=url;
+   for(let i=0;i<names.length;i+=batchSize) {
+     jobs.push(resilientBatch(names.slice(i,i+batchSize),i));
+   }
+   Promise.all(jobs).then(outcomes=>{
+     if(!outcomes.some(Boolean))notify("HistoMap konnte hier kein Kartenbild ausliefern. Prüfe, ob historische Blätter für das Gebiet vorhanden sind.");
+     done(null,tile);
+   }).catch(()=>{
+     notify("Beim Laden historischer Kartenblätter ist ein Fehler aufgetreten.");
+     done(null,tile);
    });
    return tile;
   }
  });
- return new Mosaic({tileSize:256,minZoom:10,maxZoom:19,keepBuffer:2,
+ return new Mosaic({tileSize:256,minZoom:10,maxZoom:19,keepBuffer:0,
    updateWhenIdle:true,updateWhenZooming:false,noWrap:true,opacity:1});
 }
 function mount({parent,map,maps,add}){
