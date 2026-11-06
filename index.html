@@ -248,6 +248,14 @@
     #historicalMap .leaflet-popup-content{max-height:min(55dvh,450px);overflow-y:auto;overflow-x:hidden;margin:15px 17px!important;box-sizing:border-box}
     .tree-popup{font-size:12px;color:#294435;min-width:0;max-width:300px;width:100%;overflow-wrap:anywhere}
     .tree-popup>strong{display:block;font-size:15px;margin-bottom:10px}
+    .geo-feature-popup .feature-hit-picker{display:block;font-size:12px;font-weight:650;margin:8px 0 11px}
+    .geo-feature-popup .feature-hit-picker select{display:block;margin-top:6px;width:100%;padding:8px;border:1px solid #cfddd3;background:#fff;border-radius:8px;color:#25483b;font-size:12px}
+    .geo-feature-popup .feature-doc-title{display:block;font-size:12px;margin:10px 0 7px;color:#24573f}
+    .geo-feature-popup .feature-docs{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
+    .geo-feature-popup .feature-docs a{background:#e9f3ed;border:1px solid #c4dcc9;border-radius:8px;padding:9px 10px;color:#17553b;font-size:12px;font-weight:700;text-decoration:none;overflow-wrap:anywhere}
+    .geo-feature-popup .feature-docs a:focus-visible{outline:2px solid #2a7257}
+    .geo-feature-popup .tree-properties{max-height:none}
+    
     .tree-popup p{line-height:1.5;margin:7px 0}
     .tree-properties{display:grid;grid-template-columns:minmax(0,42%) minmax(0,58%);gap:7px 8px;margin:8px 0 11px;align-items:start;width:100%}
     .tree-properties dt{color:#68756d;font-size:11px;overflow-wrap:anywhere}
@@ -591,69 +599,128 @@
         kategorie:"Kategorie",art:"Baumart"
       };
       function featurePopup(data,selected){
-        const root=document.createElement('div');root.className='tree-popup';
-        const tree=selected?.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand';
-        const header=document.createElement('strong');
-        header.textContent=tree?'Baumbestand Berlin':selected?.displayName||'Kartendaten';
-        root.appendChild(header);
-        const props=data?.properties;
-        if(props&&Object.keys(props).length){
-          const table=document.createElement('dl');table.className='tree-properties';
-          let count=0;
-          for(const [key,v] of Object.entries(props)){
-            if(v===undefined)continue;
-            const dt=document.createElement('dt');
-            dt.textContent=treeLabels[key.toLowerCase()]||
-              key.replace(/[_-]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-            const dd=document.createElement('dd');
-            const value=v===null?'–':typeof v==='object'?JSON.stringify(v):String(v);
-            const link=/^https?:\/\/\S+$/i.test(value)?value:null;
-            if(link){
-              const a=document.createElement('a');a.href=link;a.textContent=value;
-              a.target='_blank';a.rel='noopener noreferrer';dd.appendChild(a);
-            }else{
-              dd.textContent=value;
-              dd.classList.add("feature-value-copy");
-              dd.tabIndex=0;dd.setAttribute("role","button");
-              dd.title="Wert antippen, um ihn zu kopieren";
-              const copy=async()=>{
-                try{await navigator.clipboard.writeText(value);dd.title="Wert kopiert";}
-                catch(_){window.prompt("Sachdatenwert kopieren:",value);}
-              };
-              dd.addEventListener("click",copy);
-              dd.addEventListener("keydown",e=>{
-                if(e.key==="Enter"||e.key===" "){e.preventDefault();copy();}
-              });
-            }
-            table.append(dt,dd);count++;
-          }
-          if(count)root.appendChild(table);
-          else {
-            const p=document.createElement('p');
-            p.textContent='Zu diesem Objekt hat der Dienst keine weiteren Sachdaten übermittelt.';
-            root.appendChild(p);
-          }
-          if(data.count>1){
-            const note=document.createElement('small');
-            note.textContent=data.count+' Objekte im Abfragebereich; ein Treffer wird angezeigt.';
-            root.appendChild(note);
-          }
-        }else{
-          const p=document.createElement('p');
-          p.textContent=data?.error||'Für diesen Punkt sind keine Objektdaten verfügbar.';
-          root.appendChild(p);
+        const root=document.createElement("div");root.className="tree-popup geo-feature-popup";
+        const isTree=selected?.sourceUrl==="https://gdi.berlin.de/services/wms/baumbestand";
+        const isPlan=/bplan|bebauungsplan/i.test((selected?.sourceUrl||"")+" "+(selected?.displayName||""));
+        const heading=document.createElement("strong");
+        heading.textContent=isTree?"Baumbestand Berlin":isPlan?"Bebauungsplan":selected?.displayName||"Kartenobjekt";
+        root.appendChild(heading);
+        const labelNames={
+          planid:"Plannummer",planname:"Planbezeichnung",planartname:"Art des Bebauungsplans",
+          verfahrensart:"Verfahrensart",bereich:"Geltungsbereich",bezirk:"Bezirk",
+          bp_rechtsstand:"Rechtsstand",afs_behoer:"Aufstellende Behörde",
+          afs_beschl:"Aufstellungsbeschluss",afs_l_aend:"Letzter Aufstellungsbeschluss",
+          bbg_anfang:"Frühzeitige Bürgerbeteiligung – Beginn",
+          bbg_ende:"Frühzeitige Bürgerbeteiligung – Ende",
+          aul_anfang:"Öffentlichkeitsbeteiligung – Beginn",
+          aul_ende:"Öffentlichkeitsbeteiligung – Ende",
+          festsg_von:"Festgesetzt von",festsg_am:"Festsetzungsdatum",
+          fsg_gvbl_n:"Gesetz- und Verordnungsblatt – Nummer",
+          fsg_gvbl_s:"Gesetz- und Verordnungsblatt – Seite",
+          fsg_gvbl_d:"Gesetz- und Verordnungsblatt – Datum",
+          scan_www:"Planzeichnung",grund_www:"Begründung",url_www:"Bebauungsplan",
+          ausleg_www:"Beteiligungsunterlagen",
+          normkontr:"Normenkontrolle",inhalt:"Planinhalt",
+          ...treeLabels
+        };
+        const priority=["planid","planname","bp_rechtsstand","bezirk","planartname",
+          "verfahrensart","bereich","festsg_am","afs_beschl"];
+        const features=Array.isArray(data?.features)&&data.features.length?
+          data.features:(data?.properties?[{properties:data.properties}]:[]);
+        function safeWebLink(value){
+          try{
+            const target=new URL(String(value).trim());
+            return /^https?:$/.test(target.protocol)?target.href:null;
+          }catch(_){return null;}
         }
-        const source=document.createElement('a');
-        source.href=selected?.detailUrl||'https://gdi.berlin.de/';
-        source.target='_blank';source.rel='noopener noreferrer';
-        source.textContent='Quelle im Geoportal öffnen';
+        function displayName(item,i){
+          const props=item?.properties||{};
+          const preferred=props.planname||props.planid||props.plannr||
+            props.bezeichnung||props.name||props.objektname||
+            props.baumnummer||props.kennzeich||props.id||"";
+          return String(preferred||"Treffer "+(i+1)).slice(0,85);
+        }
+        if(features.length>1){
+          const row=document.createElement("label");row.className="feature-hit-picker";
+          row.textContent=features.length+" Objekte an dieser Stelle – auswählen:";
+          const select=document.createElement("select");
+          select.setAttribute("aria-label","Kartenobjekt auswählen");
+          features.forEach((item,i)=>{
+            const o=document.createElement("option");o.value=String(i);
+            o.textContent=(i+1)+". "+displayName(item,i);
+            select.appendChild(o);
+          });
+          row.appendChild(select);root.appendChild(row);
+          select.addEventListener("change",()=>renderFeature(Number(select.value)));
+        }
+        const details=document.createElement("div");root.appendChild(details);
+        function renderFeature(index){
+          details.replaceChildren();
+          const props=features[index]?.properties||{};
+          const entries=Object.entries(props).filter(([k,v])=>v!==undefined);
+          if(!entries.length){
+            const msg=document.createElement("p");
+            msg.textContent=data?.error||"Für diesen Punkt hat der Kartendienst keine weiteren Sachdaten übermittelt.";
+            details.appendChild(msg);
+          }else{
+            const ordered=entries.sort(([a],[b])=>{
+              const ia=priority.indexOf(a.toLowerCase()),ib=priority.indexOf(b.toLowerCase());
+              return (ia<0?999:ia)-(ib<0?999:ib);
+            });
+            const documents=[],attributes=[];
+            for(const [key,value] of ordered){
+              const stringValue=value===null?"–":typeof value==="object"?JSON.stringify(value):String(value);
+              const link=safeWebLink(stringValue);
+              const description=labelNames[key.toLowerCase()]||
+                key.replace(/[_-]+/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+              if(link)documents.push({label:description,url:link});
+              else attributes.push({label:description,value:stringValue});
+            }
+            if(documents.length){
+              const h=document.createElement("b");h.className="feature-doc-title";
+              h.textContent="Dokumente und weiterführende Links";details.appendChild(h);
+              const links=document.createElement("div");links.className="feature-docs";
+              for(const item of documents){
+                const link=document.createElement("a");link.href=item.url;
+                link.target="_blank";link.rel="noopener noreferrer";
+                link.textContent=item.label;link.title=item.url;
+                links.appendChild(link);
+              }
+              details.appendChild(links);
+            }
+            if(attributes.length){
+              const dl=document.createElement("dl");dl.className="tree-properties";
+              for(const item of attributes){
+                const dt=document.createElement("dt");dt.textContent=item.label;
+                const dd=document.createElement("dd");
+                dd.textContent=item.value;dd.tabIndex=0;dd.setAttribute("role","button");
+                dd.title="Wert zum Kopieren antippen";dd.className="feature-value-copy";
+                const copy=async()=>{
+                  try{await navigator.clipboard.writeText(item.value);dd.title="Kopiert";}
+                  catch(_){window.prompt("Sachdatenwert kopieren:",item.value);}
+                };
+                dd.addEventListener("click",copy);
+                dd.addEventListener("keydown",e=>{
+                  if(e.key==="Enter"||e.key===" "){e.preventDefault();copy();}
+                });
+                dl.append(dt,dd);
+              }
+              details.appendChild(dl);
+            }
+          }
+        }
+        renderFeature(0);
+        const source=document.createElement("a");
+        source.href=selected?.detailUrl||"https://gdi.berlin.de/";
+        source.target="_blank";source.rel="noopener noreferrer";
+        source.textContent="Originalquelle im Geoportal öffnen";
         root.appendChild(source);
-        const caveat=document.createElement('small');
-        caveat.textContent='Sachdaten und Datenstand werden vom jeweiligen Kartenanbieter geliefert.';
-        root.appendChild(caveat);
+        const foot=document.createElement("small");
+        foot.textContent="Angaben stammen aus dem aktuellen Kartendienst. Für rechtsverbindliche Auskünfte die zuständige Stelle kontaktieren.";
+        root.appendChild(foot);
         return root;
       }
-      map.on('click',async event=>{
+            map.on('click',async event=>{
         const selected=active;
         if(selected?.type!=='geoportal'||!window.AtlasGeoportal)return;
         const tree=selected.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand';
