@@ -251,7 +251,7 @@
     .tree-popup p{line-height:1.5;margin:7px 0}
     .tree-properties{display:grid;grid-template-columns:minmax(0,42%) minmax(0,58%);gap:7px 8px;margin:8px 0 11px;align-items:start;width:100%}
     .tree-properties dt{color:#68756d;font-size:11px;overflow-wrap:anywhere}
-    .tree-properties dd{margin:0;font-weight:650;overflow-wrap:anywhere}
+    .tree-properties dd{margin:0;font-weight:650;overflow-wrap:anywhere}.tree-properties .feature-value-copy{cursor:copy;border-bottom:1px dotted #b7d1c1}.tree-properties .feature-value-copy:hover{color:#145d45}
     .tree-popup>a{display:block;color:#20624b;margin-top:9px}
     .tree-popup>small{display:block;font-size:10px;color:#6c7d71;margin-top:7px}
     .map-info{flex:none;width:34px;height:34px;display:grid;place-items:center;border:1px solid #e1e8e1;border-radius:11px;background:#f9fbf9;color:#426755;font-size:20px;line-height:1}
@@ -611,7 +611,20 @@
             if(link){
               const a=document.createElement('a');a.href=link;a.textContent=value;
               a.target='_blank';a.rel='noopener noreferrer';dd.appendChild(a);
-            }else dd.textContent=value;
+            }else{
+              dd.textContent=value;
+              dd.classList.add("feature-value-copy");
+              dd.tabIndex=0;dd.setAttribute("role","button");
+              dd.title="Wert antippen, um ihn zu kopieren";
+              const copy=async()=>{
+                try{await navigator.clipboard.writeText(value);dd.title="Wert kopiert";}
+                catch(_){window.prompt("Sachdatenwert kopieren:",value);}
+              };
+              dd.addEventListener("click",copy);
+              dd.addEventListener("keydown",e=>{
+                if(e.key==="Enter"||e.key===" "){e.preventDefault();copy();}
+              });
+            }
             table.append(dt,dd);count++;
           }
           if(count)root.appendChild(table);
