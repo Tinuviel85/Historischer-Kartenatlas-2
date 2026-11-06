@@ -423,8 +423,8 @@
   </dialog>
   <script src="atlas-config.js"></script>
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
-  <script src="atlas-histomap.js?v=20261106-wms2"></script>
-  <script src="atlas-manager.js?v=20261106-histomap"></script>
+  <script src="atlas-histomap.js?v=20261106-fullcity"></script>
+  <script src="atlas-manager.js?v=20261106-fullcity"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -708,7 +708,7 @@
         const cfg=regionDefinitions[m.region], zoom=Math.min(cfg.zoom,12);
         const ll=L.latLng(cfg.center);
         const point=map.project(ll,zoom).divideBy(256).floor();
-        const previewUrl=m.type==='wms' ? '' : m.sourceUrl.replace('{z}',zoom).replace('{x}',point.x).replace('{y}',point.y);
+        const previewUrl=(m.type==='wms'||m.type==='histomap') ? '' : m.sourceUrl.replace('{z}',zoom).replace('{x}',point.x).replace('{y}',point.y);
         const img=$('mapPreview');img.hidden=true;$('previewFallback').hidden=false;
         img.onerror=()=>{img.hidden=true;$('previewFallback').hidden=false;};
         img.onload=()=>{img.hidden=false;$('previewFallback').hidden=true;};
@@ -749,9 +749,11 @@
         detailOpen=false;$('detailCard').classList.remove('open');
         focusMap(m,previous,restoreView);
         syncHistorical();
-        layer=(m.type==='wms'
-          ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
-          : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true})
+        layer=(m.type==='histomap'
+          ? window.AtlasHistoMap.createFullYearLayer(L,m.year,(message)=>setNotice(message,5500))
+          : m.type==='wms'
+            ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
+            : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true})
         ).addTo(historicalMap);
         applyPane();
         $('sourceAttributionLink').href=m.detailUrl;
