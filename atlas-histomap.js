@@ -35,6 +35,10 @@ function identifyWork(name,title) {
    base="K5";label="K5 · Karte 1:5.000";
  } else if(/straube/i.test(full)){
    base="Straube";label="Straube-Plan";
+ } else if(/(?:^|\D)\d{4}[\s_-]+(?:18[6-9]\d|19\d{2}|20[0-2]\d)(?:\D|$)/.test(full)){
+   // HistoMap identifiers such as 3041_1992 and 4044_1992
+   // are sheet numbers, not separate map works.
+   base="berliner-blattkarten";label="Historische Berliner Blattkarten";
  }
  // Do not combine colour and monochrome editions inadvertently.
  if(base){
@@ -154,8 +158,15 @@ function createFullYearLayer(L,year,onError,selection){
  const yr=Number(year);
  // Legacy entries saved a bare year; keep those intact. New entries
  // store year|work, so maps of a different series cannot overlap.
- const filter=(typeof selection==="string"&&selection.startsWith(String(yr)+"|"))
+ let filter=(typeof selection==="string"&&selection.startsWith(String(yr)+"|"))
    ?selection.slice(String(yr).length+1):null;
+ // Historical saved imports used individual sheet IDs: show the whole series
+ // instead of breaking users' existing cloud entries.
+ if(filter&&filter.startsWith("sheet:")){
+   const oldSheet=filter.slice(6);
+   if(identifyWork(oldSheet,oldSheet).key==="berliner-blattkarten")
+     filter="berliner-blattkarten";
+ }
  let notified=false;
  function notify(message){
   if(notified)return;
