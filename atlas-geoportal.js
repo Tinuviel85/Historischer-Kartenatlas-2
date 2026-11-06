@@ -191,45 +191,177 @@ function createLayer(L,url,onError,options={}){
  });
  return new StandardWMS();
 }
+// Inspect individual geospatial objects (B-Plans, land parcels, noise zones,
+// protected areas...). Returns all advertised object attributes and links.
+// The server, not our catalogue, is the sole authority for field values.
+function cleanFeatureText(t){return String(t||"").replace(/\s+/g," ").trim();}
+function featureList(features){
+ const valid=(features||[]).filter(f=>f&&typeof f==="object").slice(0,25);
+ return {features:valid.map(f=>({properties:f.properties||{},label:f.label||""})),
+  count:valid.length,properties:valid[0]?.properties||null,source:"WMS GetFeatureInfo"};
+}
+function parseHTMLInfo(raw){
+ const doc=new DOMParser().parseFromString(raw,"text/html");
+ doc.querySelectorAll("script,style,iframe,object,embed").forEach(n=>n.remove());
+ const results=[];
+ function withLinks(properties,key,cell){
+  const label=cleanFeatureText(key)||"Angabe";
+  const value=cleanFeatureText(cell.textContent);
+  if(value)properties[label]=value.slice(0,20000);
+  const links=Array.from(cell.querySelectorAll("a[href]"));
+  links.forEach((a,j)=>{
+   const href=a.getAttribute("href")||"";
+   try{
+    const parsed=new URL(href,"https://gdi.berlin.de/");
+    if(!/^https?:$/.test(parsed.protocol))return;
+    const name=cleanFeatureText(a.textContent);
+    const linkKey=(/https?:\/\//.test(value)?label:
+      (name&&name!==label?label+" · "+name:label+" · Dokument"))+(links.length>1?" "+(j+1):"");
+    properties[linkKey]=parsed.href;
+   }catch(_){}
+  });
+ }
+ const tables=Array.from(doc.querySelectorAll("table")).filter(t=>!t.parentElement?.closest("table"));
+ for(const table of tables){
+  const rows=Array.from(table.querySelectorAll("tr")).filter(r=>r.closest("table")===table);
+  if(!rows.length)continue;
+  const columns=rows[0].querySelectorAll(":scope > th");
+  // GeoServer's feature info: a header row of field names followed by
+  // one or more records. Each is an individual clickable object.
+  if(columns.length>=2&&rows.length>=2&&!/^(attribut|field|merkmal|name|eigenschaft|property)$/i.test(cleanFeatureText(columns[0].textContent))){
+   for(const row of rows.slice(1)){
+    const cells=Array.from(row.children).filter(x=>/^(TH|TD)$/.test(x.tagName));
+    if(cells.length!==columns.length)continue;
+    const props={};
+    columns.forEach((header,i)=>withLinks(props,header.textContent,cells[i]));
+    if(Object.keys(props).length)results.push({properties:props});
+   }
+   continue;
+  }
+  const props={};
+  for(const row of rows){
+   const cells=Array.from(row.children).filter(x=>/^(TH|TD)$/.test(x.tagName));
+   if(cells.length>=2){
+    const label=cleanFeatureText(cells[0].textContent);
+    if(label)withLinks(props,label,cells[1]);
+   }
+  }
+  if(Object.keys(props).length)results.push({properties:props});
+ }
+ if(!results.length){
+  const dts=Array.from(doc.querySelectorAll("dt"));
+  if(dts.length){
+   const props={};
+   for(const dt of dts){const dd=dt.nextElementSibling;if(dd?.tagName==="DD")withLinks(props,dt.textContent,dd);}
+   if(Object.keys(props).length)results.push({properties:props});
+  }
+ }
+ if(!results.length){
+  const body=cleanFeatureText(doc.body?.textContent||"");
+  if(body&&body.length<50000&&!/^(no features|kein(e|en)? (objekt|ergebnis|treffer)|search returned no results)/i.test(body)){
+   const props={"Auskunft des Kartendienstes":body.slice(0,20000)};
+   const links=Array.from(doc.querySelectorAll("a[href]"));
+   links.forEach((link,i)=>{
+    try{
+     const uri=new URL(link.getAttribute("href"),"https://gdi.berlin.de/");
+     if(/^https?:$/.test(uri.protocol))
+       props[(cleanFeatureText(link.textContent)||"Dokument")+" "+(i+1)]=uri.href;
+    }catch(_){}
+   });
+   results.push({properties:props});
+  }
+ }
+ return featureList(results);
+}
+function parseXMLInfo(raw){
+ const doc=new DOMParser().parseFromString(raw,"application/xml");
+ if(doc.getElementsByTagName("parsererror").length)throw Error("Der Dienst liefert kein gültiges XML.");
+ const results=[];
+ const members=Array.from(doc.getElementsByTagName("*")).filter(e=>
+  /^(featureMember|member|FeatureInfo|FIELDS|Feature)$/i.test(e.localName));
+ const sources=members.length?members:[doc.documentElement];
+ for(const source of sources.slice(0,25)){
+  const props={};
+  const attributes=source.attributes||[];
+  for(const attr of attributes){
+   if(/^(id|fid|xmlns|schemaLocation)$/i.test(attr.localName))continue;
+   const v=cleanFeatureText(attr.value);
+   if(v)props[attr.localName]=v;
+  }
+  for(const element of Array.from(source.getElementsByTagName("*"))){
+   if(element.children.length||/^(coordinates|posList|pos|boundedBy|Envelope|Polygon|MultiPolygon|geometryProperty)$/i.test(element.localName))continue;
+   const value=cleanFeatureText(element.textContent);
+   if(value&&value.length<20000)props[element.localName]=value;
+   const href=element.getAttributeNS("http://www.w3.org/1999/xlink","href")||element.getAttribute("href");
+   if(href&&/^https?:\/\//i.test(href))props[element.localName+" · Quelle"]=href;
+  }
+  if(Object.keys(props).length)results.push({properties:props});
+ }
+ return featureList(results);
+}
+function parsePlainInfo(raw){
+ const text=String(raw||"").trim();
+ if(!text||/^(no features|kein(e|en)? (objekt|ergebnis|treffer)|search returned no results)/i.test(text))
+  return featureList([]);
+ const props={};
+ for(const line of text.split(/\r?\n/)){
+  const trimmed=line.trim();
+  const match=trimmed.match(/^([^:]{2,90})\s*:\s*(.+)$/);
+  if(match)props[cleanFeatureText(match[1])]=cleanFeatureText(match[2]).slice(0,20000);
+ }
+ if(!Object.keys(props).length)props["Auskunft des Kartendienstes"]=text.slice(0,20000);
+ return featureList([{properties:props}]);
+}
 async function getFeatureInfo(map,L,latlng,url,layerName){
  if(!allowedUrl(url))throw Error("Unbekannter Berliner Kartendienst.");
  const caps=await capabilities(url);
  const layers=selectedWmsLayers(url,caps,layerName);
  const queryable=layers.filter(l=>l.queryable);
  if(!queryable.length)
-  return {properties:null,error:"Diese Kartenebene ist vom Anbieter nicht als abfragbar gekennzeichnet."};
- const formats=caps.infoFormats||[];
- const json=formats.find(x=>/application\/(?:json|geo\+json)/i.test(x));
- const plain=formats.find(x=>/text\/plain/i.test(x));
- const html=formats.find(x=>/text\/html/i.test(x));
- const format=json||plain||html;
- if(!format)return {properties:null,error:"Der WMS-Dienst bietet kein unterstütztes GetFeatureInfo-Format an."};
+  return {features:[],properties:null,error:"Diese Kartenebene bietet laut Anbieter keine Objektabfrage an. Du kannst die Originalquelle öffnen."};
+ const offered=caps.infoFormats||[];
+ const preferred=[
+  offered.find(f=>/^application\/(?:geo\+json|json)(?:$|[; ])/i.test(f)),
+  offered.find(f=>/^text\/html(?:$|[; ])/i.test(f)),
+  offered.find(f=>/^(?:application\/(?:vnd\.ogc\.gml|xml)|text\/xml)/i.test(f)),
+  offered.find(f=>/^text\/plain(?:$|[; ])/i.test(f))
+ ].filter(Boolean);
+ if(!preferred.length)
+  return {features:[],properties:null,error:"Dieser Kartendienst stellt keine unterstützte Sachdatenantwort bereit."};
  const size=map.getSize(),point=map.latLngToContainerPoint(latlng);
  const params=wmsImage(queryable.map(l=>l.name),map.getBounds(),L,size);
  params.set("REQUEST","GetFeatureInfo");
  params.set("QUERY_LAYERS",queryable.map(l=>l.name).join(","));
- params.set("INFO_FORMAT",format);
- params.set("FEATURE_COUNT","10");
+ params.set("FEATURE_COUNT","20");
  params.set("X",String(Math.max(0,Math.min(size.x-1,Math.round(point.x)))));
  params.set("Y",String(Math.max(0,Math.min(size.y-1,Math.round(point.y)))));
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),13000);
- try{
-  const response=await fetch(url+"?"+params.toString(),{mode:"cors",signal:controller.signal});
-  if(!response.ok)throw Error("GetFeatureInfo HTTP "+response.status);
-  const body=await response.text();
-  if(/<ServiceExceptionReport|<ExceptionReport/i.test(body))throw Error("Der WMS-Dienst hat die Objektauskunft zurückgewiesen.");
-  if(json){
-   const obj=JSON.parse(body);
-   const features=obj.features||(obj.type==="Feature"?[obj]:[]);
-   if(features.length)return {properties:features[0].properties||{},count:features.length,source:"GetFeatureInfo"};
-   return {properties:null,error:"Für diesen Punkt meldet der Dienst kein Objekt."};
-  }
-  const text=html?
-    new DOMParser().parseFromString(body,"text/html").body.textContent.trim():body.trim();
-  if(!text||/no features|kein(e|en)? (objekt|ergebnis|treffer)|search returned no results/i.test(text))
-   return {properties:null,error:"Für diesen Punkt meldet der Dienst keine Sachdaten."};
-  return {properties:{Sachdaten:text.slice(0,100000)},count:1,source:"GetFeatureInfo"};
- }finally{clearTimeout(timer);}
+ let lastError=null,empty=null;
+ for(const format of preferred){
+  params.set("INFO_FORMAT",format);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),13500);
+  try{
+   const response=await fetch(url+"?"+params.toString(),{mode:"cors",signal:controller.signal});
+   if(!response.ok)throw Error("GetFeatureInfo HTTP "+response.status);
+   const body=await response.text();
+   if(/<ServiceExceptionReport|<ExceptionReport/i.test(body))
+    throw Error("Der Kartendienst hat diese Sachdatenabfrage zurückgewiesen.");
+   let result;
+   if(/json/i.test(format)){
+    const data=JSON.parse(body);
+    const features=Array.isArray(data.features)?data.features:
+      data.type==="Feature"?[data]:[];
+    result=featureList(features);
+   }else if(/html/i.test(format))result=parseHTMLInfo(body);
+   else if(/(?:xml|gml)/i.test(format))result=parseXMLInfo(body);
+   else result=parsePlainInfo(body);
+   if(result.features.length)return {...result,source:"Geoportal Berlin ("+format+")"};
+   empty=result;
+  }catch(e){lastError=e;}
+  finally{clearTimeout(timer);}
+ }
+ return {...(empty||featureList([])),
+  error:lastError&&!empty?"Die Sachdaten konnten nicht abgerufen werden: "+lastError.message:
+    "An dieser Stelle meldet der Dienst keine abfragbaren Kartenobjekte."};
 }
 const TREE_WFS="https://gdi.berlin.de/services/wfs/baumbestand";
 let treeTypeNames=null,treeLookup=null;
