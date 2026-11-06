@@ -49,18 +49,23 @@ function identifyWork(name,title) {
  // never assume that matching years mean the same cartographic work.
  return {key:"sheet:"+String(name).slice(0,180),label:String(title||name).slice(0,110)};
 }
-function availableWorks(data,year,center){
+function availableWorks(data,year,center,scope="berlin"){
  const atPoint=data.items.filter(item=>item.year===year&&
    (!Array.isArray(item.box)||coversPoint(item.box,center.lat,center.lng)));
  const hasLocated=data.items.some(item=>Array.isArray(item.box));
- const filtered=hasLocated?atPoint.filter(item=>Array.isArray(item.box)):atPoint;
+ const pointItems=hasLocated?atPoint.filter(item=>Array.isArray(item.box)):atPoint;
+ const selected=scope==="point"?pointItems:data.items.filter(item=>item.year===year);
  const groups=new Map();
- for(const item of filtered){
+ for(const item of selected){
    if(!groups.has(item.work))groups.set(item.work,{key:item.work,label:item.workLabel,local:0,total:0});
-   groups.get(item.work).local++;
  }
  for(const item of data.items){
-   if(item.year===year&&groups.has(item.work))groups.get(item.work).total++;
+   const record=groups.get(item.work);
+   if(record&&item.year===year)record.total++;
+ }
+ for(const item of pointItems){
+   const record=groups.get(item.work);
+   if(record)record.local++;
  }
  return [...groups.values()].sort((a,b)=>a.label.localeCompare(b.label,"de"));
 }
@@ -212,7 +217,7 @@ function mount({parent,map,maps,add}){
  css.textContent=".histo-box{margin:0 0 14px;border:1px solid #c5d9c9;border-radius:12px;background:#f3f8f2;padding:13px}.histo-box summary{font-size:13px;font-weight:800;color:#225040;cursor:pointer}.histo-box p{font-size:12px;line-height:1.45;color:#607367}.histo-box select,.histo-box button{box-sizing:border-box;width:100%;margin:6px 0;padding:10px;border:1px solid #bed3c3;border-radius:9px;background:white;color:#254b3c;font-size:13px}.histo-box button{font-weight:750}.histo-box button.primary{background:#245040;color:white}.histo-box button:disabled{opacity:.5}.histo-box input[type=file]{font-size:12px;max-width:100%;margin:9px 0}.histo-box label{font-size:12px;font-weight:650}";
  document.head.appendChild(css);
  const box=elm("details",undefined,"histo-box");
- box.innerHTML='<summary>HistoMap Berlin · historische Kartenwerke</summary><p>Wähle zuerst ein Jahr und dann das Kartenwerk, das an dieser Stelle verfügbar ist. Beim Hinzufügen übernimmt der Atlas <strong>alle Berliner Blätter dieses Kartenwerks und Jahrgangs</strong> und lädt beim Verschieben automatisch weitere Blätter nach.</p><button id="hmLoad" type="button">Kartenbestand aktualisieren</button><label for="hmYear">1. Verfügbare Jahre an diesem Ort</label><select id="hmYear" disabled><option>Bestand wird geladen …</option></select><label for="hmWork">2. Kartenwerk auswählen</label><select id="hmWork" disabled><option>Bitte zuerst ein Jahr auswählen</option></select><button id="hmAdd" class="primary" type="button" disabled>Gewähltes Kartenwerk für ganz Berlin hinzufügen</button><p id="hmStatus" role="status">Noch nicht verbunden.</p><p>© Landesarchiv Berlin, HistoMap Berlin. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">Originalkarten ansehen</a></p><label for="hmXml">Falls der WMS-Zugriff scheitert: Kartenkatalogdatei (XML)</label><input id="hmXml" type="file" accept=".xml,application/xml,text/xml">';
+ box.innerHTML='<summary>HistoMap Berlin · historische Kartenwerke</summary><p>Wähle einen Jahrgang und ein Kartenwerk. Standardmäßig zeigt die Auswahl den <strong>Bestand für ganz Berlin</strong>. Auf Wunsch kannst du nur die Angebote für deinen Kartenmittelpunkt anzeigen. Übernommen werden immer alle verfügbaren Berliner Blätter des gewählten Kartenwerks.</p><button id="hmLoad" type="button">Kartenbestand aktualisieren</button><label for="hmScope">Kartenbestand durchsuchen</label><select id="hmScope"><option value="berlin" selected>Ganz Berlin (alle Jahrgänge und Blätter)</option><option value="point">Nur am gewählten Kartenmittelpunkt</option></select><label for="hmYear">1. Verfügbare Jahrgänge</label><select id="hmYear" disabled><option>Bestand wird geladen …</option></select><label for="hmWork">2. Kartenwerk auswählen</label><select id="hmWork" disabled><option>Bitte zuerst ein Jahr auswählen</option></select><button id="hmAdd" class="primary" type="button" disabled>Gewähltes Kartenwerk für ganz Berlin hinzufügen</button><p id="hmStatus" role="status">Noch nicht verbunden.</p><p>© Landesarchiv Berlin, HistoMap Berlin. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">Originalkarten ansehen</a></p><label for="hmXml">Falls der WMS-Zugriff scheitert: Kartenkatalogdatei (XML)</label><input id="hmXml" type="file" accept=".xml,application/xml,text/xml">';
  parent.prepend(box);
  const get=id=>$(box,id);
  let data=null;
@@ -220,10 +225,11 @@ function mount({parent,map,maps,add}){
   if(!data)return;
   const year=Number(get("hmYear").value);
   const select=get("hmWork"),before=select.value;
-  const works=availableWorks(data,year,map.getCenter());
+  const scope=get("hmScope").value;
+  const works=availableWorks(data,year,map.getCenter(),scope);
   select.replaceChildren();
   for(const work of works){
-   const option=elm("option",work.label+" · "+work.local+" Blatt/Blätter hier");
+   const option=elm("option",work.label+" · "+(scope==="point"?work.local:work.total)+" Blatt/Blätter");
    option.value=work.key;select.appendChild(option);
   }
   if(works.some(w=>w.key===before))select.value=before;
@@ -239,14 +245,14 @@ function mount({parent,map,maps,add}){
   get("hmAdd").disabled=already||!data.compatible;
   get("hmAdd").textContent=already?"Bereits in deiner Kartenbibliothek":"Gewähltes Kartenwerk für ganz Berlin hinzufügen";
   get("hmStatus").textContent=data.compatible?
-   works.length+" Kartenwerk(e) im Jahr "+year+" hier verfügbar. "+
-   found.total+" zugehörige Berliner Blätter im Katalog; "+found.local+" davon an dieser Stelle.":
+   works.length+" Kartenwerk(e) für "+year+" "+(scope==="point"?"am Kartenmittelpunkt":"berlinweit")+" verfügbar. "+
+   found.total+" zugehörige Blätter insgesamt; beim Verschieben automatisch nachgeladen.":
    "Der WMS bestätigt keine EPSG:3857-Unterstützung. Eine korrekte Überlagerung ist nicht gesichert.";
  }
  function updateYears(){
   if(!data)return;
   const middle=map.getCenter();
-  const available=yearsAt(data,middle);
+  const available=get("hmScope").value==="point"?yearsAt(data,middle):[...new Set(data.items.map(x=>x.year))].sort((a,b)=>a-b);
   const select=get("hmYear"),was=Number(select.value);
   select.replaceChildren();
   for(const year of available){
@@ -257,7 +263,7 @@ function mount({parent,map,maps,add}){
     select.disabled=true;get("hmWork").disabled=true;
     get("hmWork").replaceChildren();
     get("hmAdd").disabled=true;
-    get("hmStatus").textContent="An diesem Kartenmittelpunkt sind keine datierten HistoMap-Blätter verzeichnet. Karte verschieben und erneut öffnen.";
+    get("hmStatus").textContent="Für diese Auswahl wurden keine datierten HistoMap-Blätter gefunden. Bei lokaler Suche Karte verschieben oder auf Ganz Berlin umstellen.";
     return;
   }
   select.value=String(available.includes(was)?was:available.includes(1910)?1910:available[0]);
@@ -276,10 +282,11 @@ function mount({parent,map,maps,add}){
   }finally{get("hmLoad").disabled=false;}
  }
  get("hmLoad").addEventListener("click",()=>refresh(true));
+ get("hmScope").addEventListener("change",updateYears);
  get("hmYear").addEventListener("change",updateWork);
  get("hmWork").addEventListener("change",updateWork);
  box.addEventListener("toggle",()=>{if(!box.open)return;if(data)updateYears();else refresh(false);});
- map.on("moveend",()=>{if(box.open&&data)updateYears();});
+ map.on("moveend",()=>{if(box.open&&data&&get("hmScope").value==="point")updateYears();});
  get("hmXml").addEventListener("change",async event=>{
   const file=event.target.files?.[0];if(!file)return;
   try{if(file.size>16000000)throw Error("Katalogdatei zu groß.");data=setCache(parseCatalog(await file.text()));updateYears();}
@@ -289,7 +296,7 @@ function mount({parent,map,maps,add}){
  get("hmAdd").addEventListener("click",()=>{
   if(!data?.compatible)return;
   const year=Number(get("hmYear").value),work=get("hmWork").value;
-  const valid=availableWorks(data,year,map.getCenter()).find(x=>x.key===work);
+  const valid=availableWorks(data,year,map.getCenter(),get("hmScope").value).find(x=>x.key===work);
   if(!Number.isInteger(year)||!valid)return;
   const storedKey=String(year)+"|"+work;
   if(maps.some(m=>m&&!m.hidden&&m.type==="histomap"&&m.sourceUrl===SERVICE&&m.year===year&&m.layerName===storedKey)){
