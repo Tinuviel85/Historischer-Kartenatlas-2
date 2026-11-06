@@ -629,7 +629,7 @@
         if(!(active?.type==='geoportal'&&active.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand')||!window.AtlasGeoportal?.getTreeInfo)return;
         const serial=++treeQuerySerial;
         const waiting=document.createElement('div');waiting.textContent='Baumdaten werden abgerufen …';
-        const popup=L.popup({maxWidth:325,minWidth:215,closeButton:true})
+        const popup=L.popup({maxWidth:325,minWidth:215,closeButton:true,autoPan:false})
           .setLatLng(event.latlng).setContent(waiting).openOn(historicalMap);
         try{
           const result=await window.AtlasGeoportal.getTreeInfo(map,L,event.latlng);
