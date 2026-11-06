@@ -38,7 +38,7 @@ async function searchCSW(query,start){
  const parameters=new URLSearchParams({
   SERVICE:"CSW",REQUEST:"GetRecords",VERSION:"2.0.2",
   resultType:"results",typeNames:"csw:Record",elementSetName:"full",
-  outputSchema:"http://www.opengis.net/cat/csw/2.0.2",
+  outputSchema:"http://www.isotc211.org/2005/gmd",
   maxRecords:"30",startPosition:String(start),
   constraintLanguage:"CQL_TEXT",constraint_language_version:"1.1.0",
   constraint:"AnyText like '%"+normalQuery(query)+"%'"
