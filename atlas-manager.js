@@ -68,6 +68,19 @@
     custom.forEach(function (c) {
       if (!c || typeof c !== "object") { maps.push({id: maps.length,hidden:true}); return; }
       var item = sanitizeMap(c);
+      // Older HistoMap entries were incorrectly stored as individual
+      // sheets such as 4044_1992. Treat them as their complete map work
+      // without changing the saved map ID (favorites and links survive).
+      if (item.type === "histomap" && Number.isInteger(item.year) &&
+          item.layerName.startsWith(String(item.year)+"|sheet:") &&
+          window.AtlasHistoMap && typeof window.AtlasHistoMap.identifyWork === "function") {
+        var oldSheetName=item.layerName.slice((String(item.year)+"|sheet:").length);
+        if(window.AtlasHistoMap.identifyWork(oldSheetName,oldSheetName).key === "berliner-blattkarten") {
+          item.layerName=String(item.year)+"|berliner-blattkarten";
+          item.name="HistoMap Berlin "+item.year+" · Historische Berliner Blattkarten";
+          item.displayName=item.name;
+        }
+      }
       item.id = maps.length; item.custom = true;
       if (!item.sourceUrl || !item.name) item.hidden = true;
       maps.push(item);
