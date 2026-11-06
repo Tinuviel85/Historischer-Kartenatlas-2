@@ -620,7 +620,7 @@
         const isTree=selected?.sourceUrl==="https://gdi.berlin.de/services/wms/baumbestand";
         const isPlan=/bplan|bebauungsplan/i.test((selected?.sourceUrl||"")+" "+(selected?.displayName||""));
         const heading=document.createElement("strong");
-        heading.textContent=isTree?"Baumbestand Berlin":isPlan?"Bebauungsplan":selected?.displayName||"Kartenobjekt";
+        heading.textContent=isTree?"Baumbestand Berlin":isPlan?"Bebauungsplan":selected?.displayName||selected?.name||"Kartenobjekt";
         root.appendChild(heading);
         const labelNames={
           planid:"Plannummer",planname:"Planbezeichnung",planartname:"Art des Bebauungsplans",
@@ -738,7 +738,7 @@
         return root;
       }
             map.on('click',async event=>{
-        const selected=active;
+        const selected=preview?.item||active;
         if(selected?.type!=='geoportal'||!window.AtlasGeoportal)return;
         const tree=selected.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand';
         const serial=++treeQuerySerial;
@@ -750,10 +750,10 @@
           const result=tree?
             await window.AtlasGeoportal.getTreeInfo(map,L,event.latlng):
             await window.AtlasGeoportal.getFeatureInfo(map,L,event.latlng,selected.sourceUrl,selected.layerName);
-          if(serial!==treeQuerySerial||active?.id!==selected.id||!historicalMap.hasLayer(popup))return;
+          if(serial!==treeQuerySerial||(preview?preview.item!==selected:active?.id!==selected.id)||!historicalMap.hasLayer(popup))return;
           popup.setContent(featurePopup(result,selected));popup.update();
         }catch(e){
-          if(serial!==treeQuerySerial||active?.id!==selected.id||!historicalMap.hasLayer(popup))return;
+          if(serial!==treeQuerySerial||(preview?preview.item!==selected:active?.id!==selected.id)||!historicalMap.hasLayer(popup))return;
           popup.setContent(featurePopup({error:e.message},selected));popup.update();
         }
       });
@@ -1002,7 +1002,10 @@
         const item={...preview.item};
         $('atlasPreviewSave').disabled=true;
         try{
-          await window.atlasManager.saveDiscoveredMap(item);
+          const added=await window.atlasManager.saveDiscoveredMap(item);
+          // upsert selects the saved card and removes temporary preview.
+          if(preview)discardPreview(false);
+          if(added?.id!==undefined)selectMap(added.id,{restoreView:true});
           setNotice('Karte in deiner Sammlung gespeichert.',3800);
         }catch(error){
           $('atlasPreviewSave').disabled=false;
