@@ -181,7 +181,11 @@
       if (item.type === "histomap") {
         if (!window.AtlasHistoMap || item.sourceUrl !== "https://histomapberlin.de:8443/geoserver/histomap/wms" ||
             !Number.isInteger(item.year)) throw new Error("Ungültiger HistoMap-Jahrgang.");
-        item.layerName=String(item.year);
+        // Preserve the selected HistoMap map series (year|work).
+        // Older whole-year entries stored only the year and remain valid.
+        if (!item.layerName || (item.layerName !== String(item.year) &&
+            !item.layerName.startsWith(String(item.year)+"|")))
+          throw new Error("Bitte ein gültiges HistoMap-Kartenwerk auswählen.");
       }
       if (mapExists(item, id)) throw new Error("Diese Karte ist bereits in deiner Bibliothek.");
       if (id === null || id === undefined) {
