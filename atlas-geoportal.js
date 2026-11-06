@@ -297,6 +297,7 @@ function mount({parent,maps,add}){
   row.append(detail,button);listing.appendChild(row);
  }
  wrap.addEventListener("toggle",()=>{if(wrap.open)refreshes.forEach(fn=>fn());});
+ if(window.AtlasGeoSearch)window.AtlasGeoSearch.mount({parent:wrap,maps,add,capabilities});
 }
 window.AtlasGeoportal={mount,createLayer,capabilities,allowedUrl,getTreeInfo,services:SERVICES};
 })();
