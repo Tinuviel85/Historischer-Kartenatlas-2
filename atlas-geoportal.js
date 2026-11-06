@@ -17,7 +17,7 @@ const BY_ID=new Map(SERVICES.map(s=>[s.id,s]));
 const cache=new Map();
 const pending=new Map();
 function urlFor(id){const entry=BY_ID.get(id);return entry?ROOT+entry.slug:null;}
-function allowedUrl(url){return SERVICES.some(s=>url===ROOT+s.slug);}
+function allowedUrl(url){return typeof url==='string'&&/^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url);}
 function directChildren(node,tag){return Array.from(node.children||[]).filter(e=>e.localName===tag);}
 function directText(node,tag){return directChildren(node,tag)[0]?.textContent?.trim()||"";}
 function geoBox(layer){
@@ -52,18 +52,38 @@ function parseCapabilities(raw){
  return {leaves:named.filter(x=>!x.group)};
 }
 function serviceForUrl(url){return SERVICES.find(entry=>ROOT+entry.slug===url);}
-function selectedWmsLayers(url,info){
- const entry=serviceForUrl(url);
- if(!entry||entry.indexOnly)
-  throw Error("Der amtliche Dienst enthält hier nur Blattschnitt und Bildmitten, keine Luftbild-Rasterebene.");
- const selected=[];
- for(const id of entry.wmsLayers||[]){
-  const layer=info.leaves.find(x=>x.name===id||x.name.endsWith(":"+id));
-  if(layer)selected.push(layer);
+function selectedWmsLayers(url,info,selection){
+ const leaves=(info&&info.leaves)||[];
+ if(typeof selection==="string"&&selection!=="auto"&&selection.trim()){
+  const names=selection.split(",").map(v=>v.trim()).filter(Boolean);
+  const chosen=names.map(name=>leaves.find(layer=>layer.name===name));
+  if(chosen.length&&chosen.every(Boolean))return chosen;
+  throw Error("Die ausgewählte Kartenebene wird vom WMS nicht angeboten.");
  }
- if(!selected.length)
-  throw Error("Der amtliche Dienst nennt die erwartete Bildraster-Ebene nicht. Es wird keine Blattschnittübersicht statt eines Fotos angezeigt.");
- return selected;
+ const entry=serviceForUrl(url);
+ const reject=/(?:bildmitte|bildzentrum|bildmittel|blattschnitt|gebietsabdeckung|bildindex|bildpunkt|uebersicht|übersicht|nachweis|footprint|index|coverage|blattgrenz|bildstandort|flugstreifen|umring|rahmen|aufnahmeort)/i;
+ const usable=leaves.filter(l=>!reject.test(l.name+" "+l.title));
+ if(entry?.indexOnly)throw Error("Dieser Dienst ist nur ein Luftbildnachweis. Das Foto selbst ist hier nicht als Rasterebene hinterlegt.");
+ for(const id of entry?.wmsLayers||[]){
+  const exact=usable.find(l=>l.name===id||l.name.endsWith(":"+id));
+  if(exact)return [exact];
+ }
+ if(!usable.length)
+   throw Error("Der Dienst bietet keine Bild- oder Kartenebene an, sondern nur Blattschnitt und Nachweispunkte.");
+ const aerial=/luftbild|orthophoto|dop_|fotoblatt|senkrechtaufnahme/i.test(url);
+ const score=l=>{
+  const v=(l.name+" "+l.title).toLowerCase();
+  let n=0;
+  if(/raster|mosaik|orthophoto|fotoblatt|bilddaten|bildkarte|imagery/i.test(v))n+=15;
+  if(/luftbild|luftaufnahm|bildplan|stadtplan|karte von berlin/i.test(v))n+=10;
+  if(/^c_|^b_/.test(l.name))n+=2;
+  if(aerial&&!/luftbild|bild|foto|raster|mosaik|orthophoto/i.test(v))n-=10;
+  return n;
+ };
+ const ranked=usable.slice().sort((a,b)=>score(b)-score(a)||a.name.localeCompare(b.name));
+ // If the expected layer ID from an earlier code version was not published,
+ // select the photographic layer actually advertised by GetCapabilities.
+ return [ranked[0]];
 }
 async function capabilities(url,force=false){
  if(!allowedUrl(url))throw Error("Unbekannter Geodienst.");
@@ -75,7 +95,7 @@ async function capabilities(url,force=false){
    const response=await fetch(url+"?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities",
     {signal:ctl.signal,mode:"cors"});
    if(!response.ok)throw Error("HTTP "+response.status);
-   const info=parseCapabilities(await response.text());selectedWmsLayers(url,info);cache.set(url,info);return info;
+   const info=parseCapabilities(await response.text());cache.set(url,info);return info;
   }finally{clearTimeout(timer);}
  })();
  pending.set(url,request);
@@ -108,7 +128,7 @@ function createLayer(L,url,onError,options={}){
    const sequence=++this._generation;
    capabilities(url).then(info=>{
      if(!this._map||this._map!==map||sequence!==this._generation)return;
-     const layers=selectedWmsLayers(url,info).map(x=>x.name);
+     const layers=selectedWmsLayers(url,info,options.layerName).map(x=>x.name);
      if(!layers.length)throw Error("Keine darstellbaren Kartenebenen vorhanden.");
      const tile=L.tileLayer.wms(url,{
        layers:layers.join(","),format:"image/png",transparent:true,version:"1.1.1",
