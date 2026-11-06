@@ -80,55 +80,112 @@ function wmsImage(names,bounds,L,size){
 }
 function createLayer(L,url,onError,options={}){
  if(!allowedUrl(url))throw Error("Unbekannter Geoportal-Dienst.");
- const overlay=!!options.overlay, minZoom=overlay?12:2;
+ const overlay=!!options.overlay,minZoom=overlay?12:2;
  let notified=false;
  function warn(message){if(!notified){notified=true;onError?.(message);}}
- const source=L.GridLayer.extend({
-  createTile:function(coords,done){
-   const tile=document.createElement("div"),size=this.getTileSize();
-   tile.style.cssText="width:"+size.x+"px;height:"+size.y+"px;position:relative;overflow:hidden";
-   if(coords.z<minZoom){done(null,tile);return tile;}
-   const info=cache.get(url);
-   if(!info){
-    capabilities(url).then(()=>{if(this._map)this.redraw();})
-     .catch(e=>warn("Geoportal Berlin konnte die Kartendaten nicht laden: "+e.message));
-    done(null,tile);return tile;
+ // IMPORTANT: A Geoportal-WMS is not a mosaic of 256px Leaflet tiles.
+ // Previous code issued many GetMap requests and combined them with
+ // asynchronous tile promises: missing/late responses created square holes.
+ // Request a single view-sized image, which WMS generates and aligns itself.
+ const ViewWMS=L.Layer.extend({
+  onAdd:function(map){
+   this._map=map;
+   this._images=[];
+   this._sequence=0;
+   this._updateTimer=null;
+   map.on("moveend zoomend resize",this._schedule,this);
+   this._schedule();
+  },
+  onRemove:function(map){
+   map.off("moveend zoomend resize",this._schedule,this);
+   clearTimeout(this._updateTimer);
+   this._sequence++;
+   this._images.forEach(layer=>{if(map.hasLayer(layer))map.removeLayer(layer);});
+   this._images=[];
+   this._map=null;
+  },
+  _schedule:function(){
+   clearTimeout(this._updateTimer);
+   this._updateTimer=setTimeout(()=>this._update(),90);
+  },
+  _update:async function(){
+   const map=this._map;if(!map)return;
+   const seq=++this._sequence;
+   if(map.getZoom()<minZoom){
+     this._images.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
+     this._images=[];return;
    }
-   const bounds=this._tileCoordsToBounds(coords),area=[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()];
-   const intersects=box=>!box||(box[0]<=area[2]&&box[2]>=area[0]&&box[1]<=area[3]&&box[3]>=area[1]);
-   const names=info.group?[info.group]:info.leaves.filter(x=>intersects(x.box)).map(x=>x.name).slice(0,180);
-   if(!names.length){done(null,tile);return tile;}
-   // WMS GetMap is tried in small batches, then retried per sheet on failure.
-   const getImage=(parts,index)=>new Promise(resolve=>{
-    const img=document.createElement("img");img.alt="";img.draggable=false;
-    img.style.cssText="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:"+index;
-    let settled=false;
-    const timeout=setTimeout(()=>finish(false),14000);
-    function finish(ok){
-      if(settled)return;settled=true;clearTimeout(timeout);img.onload=null;img.onerror=null;
-      if(!ok){img.remove();img.src="";}resolve(ok);
-    }
-    img.onload=()=>finish(true);img.onerror=()=>finish(false);tile.appendChild(img);
-    const q=wmsImage(parts,bounds,L,size);img.src=url+"?"+q.toString();
-   });
-   async function draw(parts,index){
-    if(await getImage(parts,index))return true;
-    if(parts.length===1)return false;
-    const half=Math.ceil(parts.length/2);
-    const both=await Promise.all([draw(parts.slice(0,half),index),draw(parts.slice(half),index+half)]);
-    return both.some(Boolean);
+   let info;
+   try{info=await capabilities(url);}
+   catch(e){if(seq===this._sequence)warn("Geoportal Berlin antwortet nicht: "+e.message);return;}
+   if(seq!==this._sequence||!this._map)return;
+   const bounds=map.getBounds(),size=map.getSize();
+   if(!size.x||!size.y)return;
+   const area=[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()];
+   const touches=box=>!box||(box[0]<=area[2]&&box[2]>=area[0]&&box[1]<=area[3]&&box[3]>=area[1]);
+   const leaves=info.leaves.filter(l=>touches(l.box));
+   let batches=[];
+   if(leaves.length===1)batches=[[leaves[0].name]];
+   else if(leaves.length>1&&leaves.length<=12) {
+     for(let i=0;i<leaves.length;i+=4)batches.push(leaves.slice(i,i+4).map(l=>l.name));
+   } else if(info.group){
+     batches=[[info.group]];
+   } else {
+     for(let i=0;i<Math.min(leaves.length,50);i+=5)
+       batches.push(leaves.slice(i,i+5).map(l=>l.name));
    }
-   const jobs=[];
-   for(let i=0;i<names.length;i+=5)jobs.push(draw(names.slice(i,i+5),i));
-   Promise.all(jobs).then(results=>{
-    if(!results.some(Boolean))warn("Geoportal Berlin liefert für diesen Ausschnitt keine Kartenbilder.");
-    done(null,tile);
-   }).catch(()=>{warn("Beim Abrufen der Berliner Karten ist ein Fehler aufgetreten.");done(null,tile);});
-   return tile;
+   if(!batches.length){this._images.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});this._images=[];return;}
+   // Max image dimensions protect phones and meet common WMS server limits.
+   const factor=Math.min(1,1700/Math.max(size.x,size.y));
+   const px=L.point(Math.max(1,Math.round(size.x*factor)),Math.max(1,Math.round(size.y*factor)));
+   const request=names=>url+"?"+wmsImage(names,bounds,L,px).toString();
+   const self=this;
+   async function receive(names){
+     return new Promise(resolve=>{
+       const layer=L.imageOverlay(request(names),bounds,{interactive:false,opacity:1});
+       let finished=false;
+       const timer=setTimeout(()=>finish(false),14000);
+       function finish(ok){
+         if(finished)return;
+         finished=true;clearTimeout(timer);
+         layer.off("load",loaded);layer.off("error",failed);
+         if(!ok&&map.hasLayer(layer))map.removeLayer(layer);
+         resolve(ok?layer:null);
+       }
+       const loaded=()=>finish(true),failed=()=>finish(false);
+       layer.once("load",loaded);
+       layer.once("error",failed);
+       // Preserve older images until replacement is ready.
+       layer.addTo(map);
+     });
+   }
+   let images=[];
+   for(const names of batches){
+     if(seq!==this._sequence||!this._map)break;
+     let layer=await receive(names);
+     if(!layer&&names.length>1){
+       // Some services reject multi-layer requests. Try single layers.
+       for(const name of names){
+         if(seq!==this._sequence)break;
+         const single=await receive([name]);
+         if(single)images.push(single);
+       }
+     }else if(layer)images.push(layer);
+   }
+   if(seq!==this._sequence||!this._map){
+     images.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
+     return;
+   }
+   if(images.length){
+     const old=this._images;
+     this._images=images;
+     old.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
+   } else {
+     warn("Der Berliner WMS konnte für diesen Kartenausschnitt kein Bild liefern. Teilweise fehlen historische Originalaufnahmen.");
+   }
   }
  });
- return new source({tileSize:256,minZoom,maxZoom:19,keepBuffer:0,
-  updateWhenIdle:true,updateWhenZooming:false,noWrap:true});
+ return new ViewWMS();
 }
 function mount({parent,maps,add,overlayState=[],updateOverlay}){
  if(!parent||!add)return;
