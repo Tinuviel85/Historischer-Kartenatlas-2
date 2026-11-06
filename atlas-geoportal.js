@@ -63,7 +63,13 @@ function parseCapabilities(raw){
    attribution:directChildren(layer,"Attribution").map(x=>directText(x,"Title")).filter(Boolean).join("; "),
    minScale:directText(layer,"MinScaleDenominator"),
    maxScale:directText(layer,"MaxScaleDenominator"),
-   queryable:layer.getAttribute("queryable")==="1",
+   queryable:(function(){
+     for(let n=layer;n&&n.nodeType===1;n=n.parentElement){
+       const q=n.getAttribute("queryable");
+       if(q!==null)return q==="1";
+     }
+     return false;
+   })(),
    group:directChildren(layer,"Layer").length>0,box:geoBox(layer)
  })).filter(x=>x.name);
  const featureQuery=Array.from(xml.getElementsByTagNameNS("*","GetFeatureInfo"))[0];
@@ -184,6 +190,46 @@ function createLayer(L,url,onError,options={}){
   getOpacity:function(){return this._opacity;}
  });
  return new StandardWMS();
+}
+async function getFeatureInfo(map,L,latlng,url,layerName){
+ if(!allowedUrl(url))throw Error("Unbekannter Berliner Kartendienst.");
+ const caps=await capabilities(url);
+ const layers=selectedWmsLayers(url,caps,layerName);
+ const queryable=layers.filter(l=>l.queryable);
+ if(!queryable.length)
+  return {properties:null,error:"Diese Kartenebene ist vom Anbieter nicht als abfragbar gekennzeichnet."};
+ const formats=caps.infoFormats||[];
+ const json=formats.find(x=>/application\/(?:json|geo\+json)/i.test(x));
+ const plain=formats.find(x=>/text\/plain/i.test(x));
+ const html=formats.find(x=>/text\/html/i.test(x));
+ const format=json||plain||html;
+ if(!format)return {properties:null,error:"Der WMS-Dienst bietet kein unterstütztes GetFeatureInfo-Format an."};
+ const size=map.getSize(),point=map.latLngToContainerPoint(latlng);
+ const params=wmsImage(queryable.map(l=>l.name),map.getBounds(),L,size);
+ params.set("REQUEST","GetFeatureInfo");
+ params.set("QUERY_LAYERS",queryable.map(l=>l.name).join(","));
+ params.set("INFO_FORMAT",format);
+ params.set("FEATURE_COUNT","10");
+ params.set("X",String(Math.max(0,Math.min(size.x-1,Math.round(point.x)))));
+ params.set("Y",String(Math.max(0,Math.min(size.y-1,Math.round(point.y)))));
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),13000);
+ try{
+  const response=await fetch(url+"?"+params.toString(),{mode:"cors",signal:controller.signal});
+  if(!response.ok)throw Error("GetFeatureInfo HTTP "+response.status);
+  const body=await response.text();
+  if(/<ServiceExceptionReport|<ExceptionReport/i.test(body))throw Error("Der WMS-Dienst hat die Objektauskunft zurückgewiesen.");
+  if(json){
+   const obj=JSON.parse(body);
+   const features=obj.features||(obj.type==="Feature"?[obj]:[]);
+   if(features.length)return {properties:features[0].properties||{},count:features.length,source:"GetFeatureInfo"};
+   return {properties:null,error:"Für diesen Punkt meldet der Dienst kein Objekt."};
+  }
+  const text=html?
+    new DOMParser().parseFromString(body,"text/html").body.textContent.trim():body.trim();
+  if(!text||/no features|kein(e|en)? (objekt|ergebnis|treffer)|search returned no results/i.test(text))
+   return {properties:null,error:"Für diesen Punkt meldet der Dienst keine Sachdaten."};
+  return {properties:{Sachdaten:text.slice(0,100000)},count:1,source:"GetFeatureInfo"};
+ }finally{clearTimeout(timer);}
 }
 const TREE_WFS="https://gdi.berlin.de/services/wfs/baumbestand";
 let treeTypeNames=null,treeLookup=null;
@@ -319,5 +365,5 @@ function mount({parent,maps,add}){
  wrap.addEventListener("toggle",()=>{if(wrap.open)refreshes.forEach(fn=>fn());});
  if(window.AtlasGeoSearch)window.AtlasGeoSearch.mount({parent:wrap,maps,add,capabilities});
 }
-window.AtlasGeoportal={mount,createLayer,capabilities,allowedUrl,getTreeInfo,services:SERVICES};
+window.AtlasGeoportal={mount,createLayer,capabilities,allowedUrl,getTreeInfo,getFeatureInfo,services:SERVICES};
 })();
