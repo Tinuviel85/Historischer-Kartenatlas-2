@@ -244,6 +244,7 @@
     .opacity-popover{position:absolute;z-index:1005;right:calc(100% + 10px);top:50%;transform:translateY(-50%);width:min(227px,calc(100vw - 92px));padding:14px 15px 13px;background:rgba(255,255,255,.94);border:1px solid rgba(161,181,166,.4);box-shadow:0 9px 25px #142c2740;border-radius:15px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
     .opacity-popover .field-head{margin-bottom:12px}
     .opacity-popover input{display:block;width:100%;height:26px;touch-action:pan-x}
+    .tools-menu .tool-icon[aria-pressed="true"]{background:rgba(35,88,66,.27)!important;box-shadow:inset 0 0 0 2px rgba(35,88,66,.25)!important}
     .map-info{flex:none;width:34px;height:34px;display:grid;place-items:center;border:1px solid #e1e8e1;border-radius:11px;background:#f9fbf9;color:#426755;font-size:20px;line-height:1}
     .map-info:hover,.map-info:focus-visible{background:#ecf5ec;color:#1b4b3b}
     @media(max-width:680px){
@@ -358,6 +359,7 @@
           <button id="locateMapButton" class="tool-icon" type="button" aria-label="Mein Standort" title="Mein Standort"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
           <button id="addressButton" class="tool-icon" type="button" aria-label="Adresse suchen" title="Adresse suchen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button>
           <button id="shareButton" class="tool-icon" type="button" aria-label="Karte teilen" title="Teilen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m0 0-4.5 4.5M12 3l4.5 4.5"/><path d="M4 13v5a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-5"/></svg></button>
+          <button id="treesToggle" class="tool-icon" type="button" aria-label="Aktuellen Baumbestand ein- oder ausblenden" aria-pressed="false" title="Baumbestand anzeigen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 5 12h4l-5 6h16l-5-6h4L12 2Z"/><path d="M12 18v4"/></svg></button>
           <div class="opacity-tool">
             <button id="opacityToggle" class="tool-icon" type="button" aria-label="Deckkraft einstellen" aria-expanded="false" aria-controls="opacityPopover" title="Deckkraft"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-2.8 3.9-7 8.1-7 12a7 7 0 0 0 14 0c0-3.9-4.2-8.1-7-12Z"/><path d="M9 16a3 3 0 0 0 3 3"/></svg></button>
             <div id="opacityPopover" class="opacity-popover" role="group" aria-label="Deckkraft der historischen Karte" hidden>
@@ -429,7 +431,7 @@
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
   <script src="atlas-histomap.js?v=20261106-allsheets"></script>
   <script src="atlas-geoportal.js?v=20261106-official"></script>
-  <script src="atlas-manager.js?v=20261106-gdi"></script>
+  <script src="atlas-manager.js?v=20261106-gdi-trees"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -597,6 +599,7 @@
       $('closeSidebar').addEventListener('click',closeMobile);
       const closeOpacity=()=>{$('opacityPopover').hidden=true;$('opacityToggle').setAttribute('aria-expanded','false');};
       const closeTools=()=>{$('toolsMenu').hidden=true;$('toolsToggle').setAttribute('aria-expanded','false');closeOpacity();};
+      $('treesToggle').addEventListener('click',()=>window.atlasManager?.toggleTrees());
       $('toolsToggle').addEventListener('click',()=>{
         const open=$('toolsMenu').hidden;
         if(!open)closeTools();
