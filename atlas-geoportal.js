@@ -148,7 +148,7 @@ function createLayer(L,url,onError,options={}){
  const photo=/luftbild|dop_|orthophoto|straubeplan/i.test(url);
  if(photo){
   const ViewWMS=L.Layer.extend({
-   initialize:function(){this._map=null;this._opacity=1;this._version=0;this._current=null;this._pending=null;this._timer=null;this._warned=false;},
+   initialize:function(){this._map=null;this._opacity=1;this._version=0;this._current=null;this._pending=null;this._fallback=null;this._timer=null;this._warned=false;},
    onAdd:function(map){
     this._map=map;this._version++;
     map.on("moveend zoomend resize",this._schedule,this);
@@ -157,10 +157,10 @@ function createLayer(L,url,onError,options={}){
    onRemove:function(map){
     this._version++;clearTimeout(this._timer);
     map.off("moveend zoomend resize",this._schedule,this);
-    for(const ref of [this._pending,this._current]){
+    for(const ref of [this._pending,this._current,this._fallback]){
      if(ref&&map.hasLayer(ref))map.removeLayer(ref);
     }
-    this._pending=null;this._current=null;this._map=null;
+    this._pending=null;this._current=null;this._fallback=null;this._map=null;
    },
    _schedule:function(immediate){
     clearTimeout(this._timer);
@@ -195,12 +195,33 @@ function createLayer(L,url,onError,options={}){
       if(!ok){
        if(map.hasLayer(pending))map.removeLayer(pending);
        if(this._pending===pending)this._pending=null;
-       if(!this._warned){
-        this._warned=true;
-        onError?.("Das Luftbildmosaik wurde nicht ausgeliefert. Vergrößere die Karte oder prüfe den Originaldienst.");
+       // If the large GetMap image fails, try conventional WMS tiles
+       // with the exact photographic raster layer, rather than showing nothing.
+       if(!this._fallback){
+         try{
+           const back=L.tileLayer.wms(url,{
+             layers:layers.join(","),format:"image/png",transparent:true,
+             version:"1.1.1",tileSize:512,minZoom:2,maxZoom:19,
+             updateWhenIdle:true,updateWhenZooming:false,keepBuffer:1,
+             noWrap:true,opacity:this._opacity
+           });
+           back.on("tileerror",()=>{
+             if(!this._warned){
+               this._warned=true;
+               onError?.("Der amtliche Luftbilddienst liefert auch einzelne Bilder nur teilweise. Prüfe bitte den Originaldienst.");
+             }
+           });
+           this._fallback=back;back.addTo(map);
+           if(this._current&&map.hasLayer(this._current))
+             map.removeLayer(this._current);
+         }catch(e){
+           if(!this._warned){this._warned=true;onError?.("Luftbildmosaik konnte nicht geladen werden: "+e.message);}
+         }
        }
        return;
       }
+      if(this._fallback&&map.hasLayer(this._fallback))map.removeLayer(this._fallback);
+      this._fallback=null;
       const old=this._current;this._current=pending;this._pending=null;
       if(old&&old!==pending&&map.hasLayer(old))map.removeLayer(old);
     };
@@ -213,6 +234,7 @@ function createLayer(L,url,onError,options={}){
     this._opacity=Math.max(0,Math.min(1,Number(v)));
     this._current?.setOpacity(this._opacity);
     this._pending?.setOpacity(this._opacity);
+    this._fallback?.setOpacity(this._opacity);
     return this;
    },
    getOpacity:function(){return this._opacity;}
