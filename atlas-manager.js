@@ -46,6 +46,11 @@
     var custom = Array.isArray(saved.custom) ? saved.custom : [];
     var overrides = saved.overrides && typeof saved.overrides === "object" ? saved.overrides : {};
     var hidden = new Set(Array.isArray(saved.hidden) ? saved.hidden.filter(Number.isInteger) : []);
+    // Only explicit user actions add overlays; keep this in the per-user cloud library.
+    var geoportalOverlays = Array.isArray(saved.geoportalOverlays)
+      ? saved.geoportalOverlays.filter(function(o){return o&&o.id==="trees"&&
+           window.AtlasGeoportal?.allowedUrl(o.sourceUrl);}).map(function(o){return {id:o.id,sourceUrl:o.sourceUrl};})
+      : [];
 
     function registerRegion(name, lat, lon, zoom) {
       name = String(name || "").trim().slice(0, 100);
@@ -88,7 +93,7 @@
     maps.forEach(function (m, index) { m.id = index; m.hidden = !!m.hidden || hidden.has(index); });
 
     function sanitizeMap(v) {
-      var type = v.type === "histomap" ? "histomap" : v.type === "wms" ? "wms" : v.type === "tms" ? "tms" : "xyz";
+      var type = v.type === "geoportal" ? "geoportal" : v.type === "histomap" ? "histomap" : v.type === "wms" ? "wms" : v.type === "tms" ? "tms" : "xyz";
       var name = String(v.name || "").trim().slice(0, 220);
       var url = safeHttp(v.sourceUrl);
       return {
@@ -105,6 +110,7 @@
         version: 2,
         regions: storedRegions,
         deletedRegions: deletedRegions,
+        geoportalOverlays: geoportalOverlays,
         custom: maps.slice(defaultCount).map(function (m) {
           return {name:m.name,region:m.region,year:m.year,sourceUrl:m.sourceUrl,detailUrl:m.detailUrl,provider:m.provider,type:m.type,layerName:m.layerName};
         }),
@@ -123,7 +129,7 @@
     el("regions").after(launcher);
     var dialog = node("dialog", "manager-modal");
     dialog.id = "managerDialog";
-    dialog.innerHTML = '<div class="manager-inner"><div class="manager-head"><h2>Kartenbibliothek verwalten</h2><button id="managerClose" class="manager-action" type="button" aria-label="Schließen">✕</button></div><div class="manager-tabs"><button id="managerDiscoverTab" class="manager-tab" type="button">Karten entdecken</button><button id="managerMapTab" class="manager-tab" type="button">Karte hinzufügen</button><button id="managerRegionTab" class="manager-tab" type="button">Regionen</button><button id="managerBackupTab" class="manager-tab" type="button">Sicherung</button></div><section id="managerDiscover"><form id="managerDiscoverForm"><label class="manager-label" for="managerDiscoverQuery">Historische Karten nach Ort oder Begriff suchen</label><div style="display:flex;gap:7px"><input id="managerDiscoverQuery" class="manager-search" required minlength="2" maxlength="90" value="Berlin" placeholder="Berlin, Wien, Rom …"><button class="manager-action manager-primary" type="submit">Suchen</button></div></form><p class="manager-muted">Suche in bereits georeferenzierten MapWarper-Karten. Angezeigte Treffer sind externe Angebote; Verfügbarkeit und Nutzungsrechte hängen vom Anbieter ab.</p><div id="managerSearchStatus" class="manager-status" role="status"></div><div id="managerResults" class="manager-results"></div><p class="manager-muted"><a href="https://mapwarper.net/" target="_blank" rel="noopener noreferrer">MapWarper öffnen ↗</a> · Weitere Geoportale werden später angebunden.</p></section><section id="managerMap" class="manager-hidden"><form id="managerMapForm" class="manager-fields"><label class="manager-wide">Kartenname<input id="mgrName" required maxlength="220" placeholder="z. B. Berlin 1910"></label><label>Jahr (optional)<input id="mgrYear" type="number" min="1" max="2100" placeholder="1910"></label><label>Region<select id="mgrRegion"></select></label><label>Kartentyp<select id="mgrType"><option value="xyz">XYZ / WMTS-Kachel-URL</option><option value="tms">TMS-Kachel-URL</option><option value="wms">WMS-Dienst</option><option value="histomap">HistoMap Berlin · Gesamtjahrgang</option></select></label><label>Kartenanbieter<input id="mgrProvider" placeholder="z. B. MapWarper"></label><label class="manager-wide">Kachel-URL oder WMS-Endpunkt<input id="mgrUrl" type="text" required spellcheck="false" placeholder="https://…/{z}/{x}/{y}.png"></label><label class="manager-wide" id="mgrLayerWrap">WMS-Layername<input id="mgrLayer" placeholder="Technischer Name der Kartenebene"></label><label class="manager-wide">Link zur Originalquelle (optional)<input id="mgrDetails" spellcheck="false" placeholder="https://…"></label><div class="manager-actions manager-wide"><button class="manager-action manager-primary" type="submit">Karte speichern</button><button id="mgrDelete" class="manager-action manager-danger manager-hidden" type="button">Karte entfernen</button><button id="mgrCancelEdit" class="manager-action" type="button">Abbrechen</button></div></form><p class="manager-muted">XYZ benötigt {z}, {x}, {y}. WMS benötigt den Layernamen aus „GetCapabilities“. Ein WMS-Server muss die verwendete Projektion EPSG:3857 unterstützen. Mit angemeldetem Konto werden Änderungen mit deiner Cloud-Bibliothek synchronisiert.</p></section><section id="managerRegion" class="manager-hidden"><form id="managerRegionForm" class="manager-fields"><label class="manager-wide">Neue Region / Ort<input id="mgrRegionName" required maxlength="100" placeholder="z. B. Potsdam"></label><label>Breitengrad<input id="mgrLat" type="number" min="-90" max="90" step="any" placeholder="52.4"></label><label>Längengrad<input id="mgrLon" type="number" min="-180" max="180" step="any" placeholder="13.0"></label><label>Karten-Zoom<input id="mgrZoom" type="number" min="2" max="19" value="12"></label><div class="manager-actions manager-wide"><button class="manager-action" type="button" id="mgrLookupRegion">Koordinaten automatisch suchen</button><button class="manager-action manager-primary" type="submit">Region speichern</button></div></form><p id="mgrRegionStatus" class="manager-status" role="status"></p><div id="mgrRegionList" class="manager-results"></div><p class="manager-muted">Regionen können angelegt, bearbeitet und gelöscht werden. Vor dem Löschen werden zugehörige Karten in eine andere Region verschoben. Berlin bleibt als Startregion erhalten. Für die Ortssuche verwenden wir OpenStreetMap / Nominatim.</p></section><section id="managerBackup" class="manager-hidden"><p class="manager-muted">Änderungen werden derzeit nur auf diesem Gerät gespeichert. Exportiere eine Sicherung, bevor du den Browser wechselst oder lokale Daten löschst. Die Datei enthält deine individuellen Karteneinträge, Regionen und ausgeblendeten Karten.</p><div class="manager-actions"><button id="mgrExport" class="manager-action manager-primary">Sicherung herunterladen</button><button id="mgrRestore" class="manager-action">Entfernte Karten wiederherstellen</button><label class="manager-action" for="mgrImport" style="cursor:pointer">Sicherung importieren</label><input id="mgrImport" type="file" accept="application/json,.json" hidden></div><p class="manager-muted">Ein Konto und geräteübergreifende Speicherung werden als nächste Ausbaustufe ergänzt.</p></section></div>';
+    dialog.innerHTML = '<div class="manager-inner"><div class="manager-head"><h2>Kartenbibliothek verwalten</h2><button id="managerClose" class="manager-action" type="button" aria-label="Schließen">✕</button></div><div class="manager-tabs"><button id="managerDiscoverTab" class="manager-tab" type="button">Karten entdecken</button><button id="managerMapTab" class="manager-tab" type="button">Karte hinzufügen</button><button id="managerRegionTab" class="manager-tab" type="button">Regionen</button><button id="managerBackupTab" class="manager-tab" type="button">Sicherung</button></div><section id="managerDiscover"><form id="managerDiscoverForm"><label class="manager-label" for="managerDiscoverQuery">Historische Karten nach Ort oder Begriff suchen</label><div style="display:flex;gap:7px"><input id="managerDiscoverQuery" class="manager-search" required minlength="2" maxlength="90" value="Berlin" placeholder="Berlin, Wien, Rom …"><button class="manager-action manager-primary" type="submit">Suchen</button></div></form><p class="manager-muted">Suche in bereits georeferenzierten MapWarper-Karten. Angezeigte Treffer sind externe Angebote; Verfügbarkeit und Nutzungsrechte hängen vom Anbieter ab.</p><div id="managerSearchStatus" class="manager-status" role="status"></div><div id="managerResults" class="manager-results"></div><p class="manager-muted"><a href="https://mapwarper.net/" target="_blank" rel="noopener noreferrer">MapWarper öffnen ↗</a> · Weitere Geoportale werden später angebunden.</p></section><section id="managerMap" class="manager-hidden"><form id="managerMapForm" class="manager-fields"><label class="manager-wide">Kartenname<input id="mgrName" required maxlength="220" placeholder="z. B. Berlin 1910"></label><label>Jahr (optional)<input id="mgrYear" type="number" min="1" max="2100" placeholder="1910"></label><label>Region<select id="mgrRegion"></select></label><label>Kartentyp<select id="mgrType"><option value="xyz">XYZ / WMTS-Kachel-URL</option><option value="tms">TMS-Kachel-URL</option><option value="wms">WMS-Dienst</option><option value="geoportal" disabled>Geoportal Berlin (über „Karten entdecken“)</option><option value="histomap" disabled>HistoMap-Altbestand (Detailrecherche empfohlen)</option></select></label><label>Kartenanbieter<input id="mgrProvider" placeholder="z. B. MapWarper"></label><label class="manager-wide">Kachel-URL oder WMS-Endpunkt<input id="mgrUrl" type="text" required spellcheck="false" placeholder="https://…/{z}/{x}/{y}.png"></label><label class="manager-wide" id="mgrLayerWrap">WMS-Layername<input id="mgrLayer" placeholder="Technischer Name der Kartenebene"></label><label class="manager-wide">Link zur Originalquelle (optional)<input id="mgrDetails" spellcheck="false" placeholder="https://…"></label><div class="manager-actions manager-wide"><button class="manager-action manager-primary" type="submit">Karte speichern</button><button id="mgrDelete" class="manager-action manager-danger manager-hidden" type="button">Karte entfernen</button><button id="mgrCancelEdit" class="manager-action" type="button">Abbrechen</button></div></form><p class="manager-muted">XYZ benötigt {z}, {x}, {y}. WMS benötigt den Layernamen aus „GetCapabilities“. Ein WMS-Server muss die verwendete Projektion EPSG:3857 unterstützen. Mit angemeldetem Konto werden Änderungen mit deiner Cloud-Bibliothek synchronisiert.</p></section><section id="managerRegion" class="manager-hidden"><form id="managerRegionForm" class="manager-fields"><label class="manager-wide">Neue Region / Ort<input id="mgrRegionName" required maxlength="100" placeholder="z. B. Potsdam"></label><label>Breitengrad<input id="mgrLat" type="number" min="-90" max="90" step="any" placeholder="52.4"></label><label>Längengrad<input id="mgrLon" type="number" min="-180" max="180" step="any" placeholder="13.0"></label><label>Karten-Zoom<input id="mgrZoom" type="number" min="2" max="19" value="12"></label><div class="manager-actions manager-wide"><button class="manager-action" type="button" id="mgrLookupRegion">Koordinaten automatisch suchen</button><button class="manager-action manager-primary" type="submit">Region speichern</button></div></form><p id="mgrRegionStatus" class="manager-status" role="status"></p><div id="mgrRegionList" class="manager-results"></div><p class="manager-muted">Regionen können angelegt, bearbeitet und gelöscht werden. Vor dem Löschen werden zugehörige Karten in eine andere Region verschoben. Berlin bleibt als Startregion erhalten. Für die Ortssuche verwenden wir OpenStreetMap / Nominatim.</p></section><section id="managerBackup" class="manager-hidden"><p class="manager-muted">Änderungen werden derzeit nur auf diesem Gerät gespeichert. Exportiere eine Sicherung, bevor du den Browser wechselst oder lokale Daten löschst. Die Datei enthält deine individuellen Karteneinträge, Regionen und ausgeblendeten Karten.</p><div class="manager-actions"><button id="mgrExport" class="manager-action manager-primary">Sicherung herunterladen</button><button id="mgrRestore" class="manager-action">Entfernte Karten wiederherstellen</button><label class="manager-action" for="mgrImport" style="cursor:pointer">Sicherung importieren</label><input id="mgrImport" type="file" accept="application/json,.json" hidden></div><p class="manager-muted">Ein Konto und geräteübergreifende Speicherung werden als nächste Ausbaustufe ergänzt.</p></section></div>';
     document.body.appendChild(dialog);
     function open(tab) { switchTab(tab || "discover"); if (!dialog.open) dialog.showModal(); }
     function switchTab(tab) {
@@ -189,7 +195,7 @@
       if (!item.name || !item.sourceUrl) throw new Error("Name und gültige HTTP(S)-Adresse sind erforderlich.");
       if (!defs[item.region]) throw new Error("Bitte zuerst eine Region anlegen.");
       if (item.type === "wms" && !item.layerName) throw new Error("Bitte den WMS-Layernamen angeben.");
-      if (item.type !== "wms" && item.type !== "histomap" && !["{z}","{x}","{y}"].every(function (v) {return item.sourceUrl.includes(v);}))
+      if (item.type !== "wms" && item.type !== "histomap" && item.type !== "geoportal" && !["{z}","{x}","{y}"].every(function (v) {return item.sourceUrl.includes(v);}))
         throw new Error("Eine XYZ-/TMS-URL muss {z}, {x} und {y} enthalten.");
       if (item.type === "histomap") {
         if (!window.AtlasHistoMap || item.sourceUrl !== "https://histomapberlin.de:8443/geoserver/histomap/wms" ||
@@ -199,6 +205,11 @@
         if (!item.layerName || (item.layerName !== String(item.year) &&
             !item.layerName.startsWith(String(item.year)+"|")))
           throw new Error("Bitte ein gültiges HistoMap-Kartenwerk auswählen.");
+      }
+      if (item.type === "geoportal") {
+        if(!window.AtlasGeoportal?.allowedUrl(item.sourceUrl))
+          throw new Error("Dieser Geoportal-Dienst ist nicht im geprüften Berliner Katalog.");
+        item.layerName="auto";
       }
       if (mapExists(item, id)) throw new Error("Diese Karte ist bereits in deiner Bibliothek.");
       if (id === null || id === undefined) {
@@ -458,9 +469,29 @@
         localStorage.setItem(KEY, JSON.stringify(data));location.reload();
       } catch(e) { api.setNotice("Import fehlgeschlagen: "+e.message,6500); }
     });
-    if (window.AtlasHistoMap) window.AtlasHistoMap.mount({
-      parent:el("managerDiscover"), map:api.map, maps:maps, add:upsert
+    // HistoMap is intentionally no longer offered as a faux citywide
+    // year-series. Existing user maps remain readable and removable.
+    var histoNote=node("p","manager-muted");
+    histoNote.innerHTML='HistoMap Berlin eignet sich für <strong>grundstücks- und blattgenaue Detailrecherchen</strong>, nicht für einheitliche Gesamtberliner Jahrgänge. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">HistoMap im Original öffnen ↗</a>';
+    el("managerDiscover").appendChild(histoNote);
+    function updateGeoportalOverlay(entry, enabled) {
+      if(!entry||entry.id!=="trees")return;
+      if(enabled) {
+        if(!window.AtlasGeoportal?.allowedUrl(entry.sourceUrl))throw new Error("Unbekannter Geodienst.");
+        if(!geoportalOverlays.some(function(o){return o.id===entry.id;}))
+          geoportalOverlays.push({id:entry.id,sourceUrl:entry.sourceUrl});
+      } else {
+        for(var j=geoportalOverlays.length-1;j>=0;j--)
+          if(geoportalOverlays[j].id===entry.id)geoportalOverlays.splice(j,1);
+      }
+      api.setGeoportalOverlay(entry,enabled);
+      persist();
+    }
+    if (window.AtlasGeoportal) window.AtlasGeoportal.mount({
+      parent:el("managerDiscover"),maps:maps,add:upsert,
+      overlayState:geoportalOverlays,updateOverlay:updateGeoportalOverlay
     });
+    geoportalOverlays.forEach(function(entry){api.setGeoportalOverlay(entry,true);});
     return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap};
   }
   window.AtlasManager = {mount:mount};
