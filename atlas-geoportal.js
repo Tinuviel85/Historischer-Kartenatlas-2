@@ -45,11 +45,31 @@ function parseCapabilities(raw){
    .concat(Array.from(xml.getElementsByTagNameNS("*","CRS")));
  if(!crs.some(e=>/(^|\s)EPSG:3857(\s|$)/i.test(e.textContent||"")))
    throw Error("Der Dienst bestätigt keine Web-Mercator-Darstellung (EPSG:3857).");
+ function childLinks(l,name){
+   return directChildren(l,name).flatMap(m=>
+      Array.from(m.getElementsByTagNameNS("*","OnlineResource")).map(u=>
+       u.getAttributeNS("http://www.w3.org/1999/xlink","href")||
+       u.getAttribute("xlink:href")||u.getAttribute("href")||""
+      ).filter(v=>/^https?:\/\//i.test(v)));
+ }
  const named=nodes.map(layer=>({
    name:directText(layer,"Name"),title:directText(layer,"Title"),
+   abstract:directText(layer,"Abstract"),
+   keywords:directChildren(layer,"KeywordList").flatMap(n=>
+      Array.from(n.getElementsByTagNameNS("*","Keyword")).map(x=>x.textContent.trim()).filter(Boolean)),
+   crs:directChildren(layer,"CRS").concat(directChildren(layer,"SRS")).map(x=>x.textContent.trim()),
+   styles:directChildren(layer,"Style").map(x=>directText(x,"Name")).filter(Boolean),
+   metadataUrls:childLinks(layer,"MetadataURL"),dataUrls:childLinks(layer,"DataURL"),
+   attribution:directChildren(layer,"Attribution").map(x=>directText(x,"Title")).filter(Boolean).join("; "),
+   minScale:directText(layer,"MinScaleDenominator"),
+   maxScale:directText(layer,"MaxScaleDenominator"),
+   queryable:layer.getAttribute("queryable")==="1",
    group:directChildren(layer,"Layer").length>0,box:geoBox(layer)
  })).filter(x=>x.name);
- return {leaves:named.filter(x=>!x.group)};
+ const featureQuery=Array.from(xml.getElementsByTagNameNS("*","GetFeatureInfo"))[0];
+ const infoFormats=featureQuery?
+   Array.from(featureQuery.getElementsByTagNameNS("*","Format")).map(x=>x.textContent.trim()).filter(Boolean):[];
+ return {leaves:named.filter(x=>!x.group),infoFormats};
 }
 function serviceForUrl(url){return SERVICES.find(entry=>ROOT+entry.slug===url);}
 function selectedWmsLayers(url,info,selection){
