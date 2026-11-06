@@ -223,6 +223,28 @@
     function mapExists(item, exceptId) {
       return maps.some(function (m) {return m && !m.hidden && m.id !== exceptId && m.sourceUrl === item.sourceUrl && (m.layerName || "") === (item.layerName || "");});
     }
+    function normalizePreview(item){
+      var clean=sanitizeMap(item);
+      if(clean.type==="wmts"){
+        clean.sourceUrl=clean.sourceUrl.replace(/\{TileMatrix\}/gi,"{z}")
+          .replace(/\{TileCol\}/gi,"{x}").replace(/\{TileRow\}/gi,"{y}");
+      }
+      if(!clean.name||!clean.sourceUrl)throw Error("Name und Kartenadresse erforderlich.");
+      if(clean.type==="wms"&&!clean.layerName)throw Error("WMS-Layername fehlt.");
+      if(!["wms","geoportal","histomap"].includes(clean.type)&&
+         !["{z}","{x}","{y}"].every(p=>clean.sourceUrl.includes(p)))
+        throw Error("Für diese Kartenart werden {z}, {x} und {y} in der URL benötigt.");
+      return clean;
+    }
+    function previewDiscoveredMap(item){
+      var clean=normalizePreview(item);
+      api.previewMap(clean);
+    }
+    async function saveDiscoveredMap(item){
+      var clean=normalizePreview(item);
+      if(!defs[clean.region])await ensureRegion(clean.region);
+      return upsert(clean,null);
+    }
     function upsert(item, id) {
       item = sanitizeMap(item);
       if(item.type==="wmts"){
@@ -262,15 +284,24 @@
       }
       persist(); redraw(); api.selectMap(item.id); return item;
     }
+    // Manual entry is also a real map preview; only editing an existing
+    // library item saves directly.
+    const manualSubmit=el("managerMapForm").querySelector('button[type="submit"]');
+    if(manualSubmit)manualSubmit.textContent="Auf Karte legen";
     el("managerMapForm").addEventListener("submit", function (ev) {
       ev.preventDefault();
       try {
-        upsert({
+        const proposed={
           name:el("mgrName").value,year:el("mgrYear").value,region:el("mgrRegion").value,
           type:el("mgrType").value,sourceUrl:el("mgrUrl").value,layerName:el("mgrLayer").value,
           provider:el("mgrProvider").value,detailUrl:el("mgrDetails").value
-        }, editing);
-        dialog.close(); api.setNotice("Karte gespeichert.");
+        };
+        if(editing===null){
+          previewDiscoveredMap(proposed);
+        }else{
+          upsert(proposed,editing);
+          dialog.close();api.setNotice("Änderungen gespeichert.");
+        }
       } catch (e) { api.setNotice(e.message, 6000); window.alert(e.message); }
     });
     function removeMap(id) {
@@ -411,7 +442,7 @@
     const allmapsForm=document.createElement("form");
     allmapsForm.id="atlasAllmapsImport";
     allmapsForm.style.cssText="border-top:1px solid #dce6dd;padding-top:15px;margin-top:15px";
-    allmapsForm.innerHTML='<label class="manager-label" for="atlasAllmapsURL">Allmaps: georeferenzierte IIIF-Karte übernehmen</label><input id="atlasAllmapsURL" class="manager-search" type="url" required placeholder="https://annotations.allmaps.org/maps/…"><div class="manager-fields" style="margin-top:8px"><label>Kartenname<input id="atlasAllmapsName" required placeholder="Historische Karte"></label><label>Region<input id="atlasAllmapsRegion" required value="Berlin"></label></div><div class="manager-actions"><button class="manager-action manager-primary" type="submit">Allmaps-Karte übernehmen</button><a class="manager-action" href="https://viewer.allmaps.org/" target="_blank" rel="noopener noreferrer">Allmaps-Karten ansehen ↗</a></div><p class="manager-muted">Füge die URL einer bereits georeferenzierten Allmaps-Annotation ein. Eine bloße IIIF-Bild-URL ohne Georeferenzierung reicht nicht. XYZ-Tiles werden automatisch erzeugt.</p><p class="manager-status" id="atlasAllmapsStatus" role="status"></p>';
+    allmapsForm.innerHTML='<label class="manager-label" for="atlasAllmapsURL">Allmaps: georeferenzierte IIIF-Karte ansehen</label><input id="atlasAllmapsURL" class="manager-search" type="url" required placeholder="https://annotations.allmaps.org/maps/…"><div class="manager-fields" style="margin-top:8px"><label>Kartenname<input id="atlasAllmapsName" required placeholder="Historische Karte"></label><label>Region<input id="atlasAllmapsRegion" required value="Berlin"></label></div><div class="manager-actions"><button class="manager-action manager-primary" type="submit">Auf Karte legen</button><a class="manager-action" href="https://viewer.allmaps.org/" target="_blank" rel="noopener noreferrer">Allmaps-Karten ansehen ↗</a></div><p class="manager-muted">Füge die URL einer bereits georeferenzierten Allmaps-Annotation ein. Eine bloße IIIF-Bild-URL ohne Georeferenzierung reicht nicht. XYZ-Tiles werden automatisch erzeugt.</p><p class="manager-status" id="atlasAllmapsStatus" role="status"></p>';
     const allmapsPanel=disclosure("managerAllmapsProvider","Allmaps · georeferenzierte IIIF-Karten");
     allmapsPanel.appendChild(allmapsForm);
     discover.insertBefore(allmapsPanel,manualPanel);
@@ -425,11 +456,9 @@
       if(!uri||!uri.startsWith("https:")){status.textContent="Die Annotations-URL muss mit https:// beginnen.";return;}
       status.textContent="Region ermitteln und Karte hinzufügen …";
       try {
-        await ensureRegion(region);
         const tiles="https://allmaps.xyz/{z}/{x}/{y}.png?url="+encodeURIComponent(uri);
-        const result=upsert({name:name,region:region,provider:"Allmaps / IIIF",type:"xyz",sourceUrl:tiles,detailUrl:uri},null);
-        status.textContent="Karte „"+result.name+"“ hinzugefügt.";
-        api.setNotice("Allmaps-Karte hinzugefügt. Kartenausschnitt und Quellrechte prüfen.");
+        previewDiscoveredMap({name:name,region:region,provider:"Allmaps / IIIF",type:"xyz",sourceUrl:tiles,detailUrl:uri});
+        status.textContent="Karte als Vorschau auf der Karte geöffnet – noch nicht gespeichert.";
       }catch(e){status.textContent=e.message;}
     });
     el("managerDiscoverForm").addEventListener("submit", async function (ev) {
@@ -446,16 +475,14 @@
         var found=maps.some(function(m) {return m&&!m.hidden&&String(m.sourceUrl).replace(/^http:/,"https:")===url;});
         var row=node("div","manager-result"), box=node("div");
         box.append(node("strong","",item.name),node("small","",(item.year?item.year+" · ":"")+item.provider+" · Kartenkacheln"));
-        var btn=node("button","manager-action"+(found?"":" manager-primary"),found?"Vorhanden":"+ Übernehmen");
-        btn.disabled=found;btn.type="button";
+        var btn=node("button","manager-action manager-primary",found?"Auf Karte ansehen":"Auf Karte legen");
+        btn.disabled=false;btn.type="button";
         btn.addEventListener("click",async function () {
-          btn.disabled=true;btn.textContent="Übernahme …";
+          btn.disabled=true;btn.textContent="Öffne Vorschau …";
           try {
-            await ensureRegion(item.region);
-            var added=upsert(item,null);
-            btn.textContent="Übernommen";
-            api.setNotice("„"+added.name+"“ hinzugefügt. Quelle und Nutzungsrechte beachten.");
-          } catch(e) {btn.disabled=false;btn.textContent="+ Übernehmen";api.setNotice(e.message,6500);window.alert(e.message);}
+            previewDiscoveredMap(item);
+          } catch(e) {api.setNotice(e.message,6500);window.alert(e.message);}
+          finally{btn.disabled=false;btn.textContent=found?"Auf Karte ansehen":"Auf Karte legen";}
         });
         row.append(box,btn);out.appendChild(row);count++;
       }
@@ -527,7 +554,7 @@
     // Persist the migrated tree card once, including its stable ID.
     // Other user maps, hidden state and favorites remain unchanged.
     if(treeWasAdded)persist();
-    return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap};
+    return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap,previewDiscoveredMap,saveDiscoveredMap};
   }
   window.AtlasManager = {mount:mount};
 }());
