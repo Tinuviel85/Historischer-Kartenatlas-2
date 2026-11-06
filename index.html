@@ -319,7 +319,7 @@
     <aside id="sidebar" class="sidebar" aria-label="Kartenbibliothek">
       <div class="sidebar-top">
         <div class="brand">
-          <button class="brand-mark" id="aboutBrand" type="button" title="Über die Anwendung" aria-label="Über die Anwendung">H</button>
+          <button class="brand-mark" id="aboutBrand" type="button" title="Über die Anwendung" aria-label="Über die Anwendung">K</button>
           <div class="brand-text"><strong>Kartenatlas</strong><small>Von früher bis heute</small></div>
           <button id="closeSidebar" class="mobile-close" title="Kartenauswahl schließen" aria-label="Kartenauswahl schließen">×</button>
         </div>
@@ -399,19 +399,19 @@
         <div id="addressResults" class="address-results" role="status"></div>
         <small class="mini-note">Ortssuche über OpenStreetMap / Nominatim. Suchbegriffe werden für die Suche an diesen Dienst übertragen.</small>
       </div>
-      <div id="detailCard" class="detail-card" aria-label="Informationen zur historischen Karte">
+      <div id="detailCard" class="detail-card" aria-label="Informationen zur ausgewählten Karte">
         <div class="detail-head"><strong>Karteninformationen</strong><a id="detailLink" class="small-link" href="#" target="_blank" rel="noopener noreferrer">Quelle öffnen ↗</a><button id="closeDetail" class="detail-close" type="button" aria-label="Karteninformationen schließen">×</button></div>
         <div class="detail-content">
-          <img id="mapPreview" class="preview" alt="Kachelvorschau der ausgewählten historischen Karte" hidden>
+          <img id="mapPreview" class="preview" alt="Vorschau der ausgewählten Karte" hidden>
           <div id="previewFallback" class="preview-fallback">Keine Vorschau verfügbar</div>
           <div class="detail-desc"><div id="detailTitle"></div><div id="detailYear"></div><div id="detailRegion"></div><div id="detailProvider"></div><div style="margin-top:5px">Urheberrechte und Lizenz beim jeweiligen Kartenanbieter prüfen.</div></div>
         </div>
       </div>
       <div class="map-bottom">
-        <div id="compareRangeBox" class="compare-range-box"><span>Damals</span><input id="compareRange" type="range" min="0" max="100" value="50" step="1" aria-label="Position des Kartenvergleichs"><span>Heute</span></div>
-        <div class="timeline" aria-label="Zeitleiste der Region">
+        <div id="compareRangeBox" class="compare-range-box"><span>Gewählte Karte</span><input id="compareRange" type="range" min="0" max="100" value="50" step="1" aria-label="Position des Kartenvergleichs"><span>Grundkarte</span></div>
+        <div class="timeline" aria-label="Karten verschiedener Zeitstände">
           <button id="prevYear" type="button" title="Ältere Karte" aria-label="Ältere Karte">‹</button>
-          <div class="timeline-center"><strong id="timelineYear">Berlin · Ohne historische Karte</strong><small id="timelineText">Karte auswählen oder durch Jahre blättern</small></div>
+          <div class="timeline-center"><strong id="timelineYear">Berlin · Straßenkarte</strong><small id="timelineText">Karte aus deiner Sammlung wählen</small></div>
           <button id="timelineInfo" class="timeline-info" type="button" aria-label="Karteninformationen" title="Karteninformationen" disabled>ⓘ</button>
           <button id="nextYear" type="button" title="Neuere Karte" aria-label="Neuere Karte">›</button>
         </div>
@@ -421,9 +421,9 @@
   </div>
   <dialog id="aboutDialog" class="about-modal">
     <h2>Über den Kartenatlas</h2>
-    <p>Der historische Kartenatlas zeigt ausgewählte historische, georeferenzierte Karten über aktuellen OpenStreetMap-Kacheln. Die Karten werden direkt von den in dieser HTML-Datei hinterlegten externen Anbietern geladen.</p>
+    <p>Der Kartenatlas zeigt Stadtpläne, historische und aktuelle Luftbilder sowie Geodaten von früher bis heute. Jede Karte wird einzeln in der Kartenbibliothek ausgewählt und ersetzt beim Wechsel die vorherige Auswahl. Zum Vergleich dient die aktuelle OpenStreetMap-Grundkarte.</p>
     <p><b>Hinweis für iPhone/iPad:</b> Beim direkten Öffnen aus Dateien in Edge (edge://external-file) kann der Browser externe Skripte blockieren. Für den zuverlässigen Betrieb die index.html über HTTPS, beispielsweise GitHub Pages, aufrufen. Kartenkacheln benötigen weiterhin Internet.</p>
-    <p><b>Bedienung:</b> Eine Karte aus der Bibliothek auswählen, ihre Deckkraft einstellen oder unter „Vergleichen“ die Trennlinie verschieben. Die Zeitleiste wechselt zwischen datierten Karten derselben Region. Über die Suche lassen sich heutige Adressen ansteuern.</p>
+    <p><b>Bedienung:</b> Eine Karte aus der Bibliothek auswählen, ihre Deckkraft einstellen oder unter „Vergleichen“ die Trennlinie verschieben. Die Kartennavigation wechselt zwischen verschiedenen Karten der gewählten Region, einschließlich aktueller Geodaten. Über die Suche lassen sich heutige Adressen ansteuern.</p>
     <p>Die automatische Positionierung nutzt <b>ungefähre Regionsmittelpunkte</b>, keine geprüften Kartengrenzen. Einige alte externe Kachelserver können nicht mehr erreichbar sein; die Quelladressen wurden bewusst unverändert übernommen. Bei historischen Karten können unkartierte Flächen transparent bleiben.</p>
     <p>Ohne Anmeldung werden deine Favoriten und eigenen Karten lokal im Browser gespeichert. Mit Benutzerkonto können persönliche Kartenbibliotheken über Supabase synchronisiert werden. Der Standort und optional die Kompassrichtung werden erst auf Knopfdruck angefragt. Ein geteilter Link kann den sichtbaren Kartenausschnitt und damit auch eine Standortposition enthalten.</p>
     <p>Grundkarte: © OpenStreetMap-Mitwirkende. Historische Karten: jeweilige Anbieter und Originalquellen; Lizenzen und Urheberrechte sind dort einzusehen.</p>
@@ -433,8 +433,8 @@
   <script src="atlas-config.js"></script>
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
   <script src="atlas-histomap.js?v=20261106-allsheets"></script>
-  <script src="atlas-geoportal.js?v=20261106-raster-only"></script>
-  <script src="atlas-manager.js?v=20261106-gdi-trees"></script>
+  <script src="atlas-geoportal.js?v=20261106-unified-v1"></script>
+  <script src="atlas-manager.js?v=20261106-unified-v1"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -1024,7 +1024,7 @@
         const url=new URL(window.location.href);url.hash=params.toString();
         const sharePrivacyWarning=gpsKnownPosition?' Achtung: Der Kartenausschnitt kann deinen Standort erkennen lassen.':'';
         try{
-          if(navigator.share){await navigator.share({title:'Historischer Kartenatlas',url:url.toString()});return;}
+          if(navigator.share){await navigator.share({title:'Kartenatlas – Von früher bis heute',url:url.toString()});return;}
           if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(url.toString());setNotice('Link zum Kartenausschnitt kopiert.'+sharePrivacyWarning,6500);return;}
           window.prompt('Link kopieren:',url.toString());
         }catch(e){if(e.name!=='AbortError')window.prompt('Link kopieren:',url.toString());}
