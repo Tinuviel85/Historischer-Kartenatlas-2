@@ -293,12 +293,19 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
   function alreadyMap(){return maps.some(m=>m&&!m.hidden&&m.sourceUrl===urlFor(entry.id)&&m.type==="geoportal");}
   function overlayActive(){return overlayState.some(o=>o&&o.id===entry.id);}
   function refreshButton(){
+   if(entry.indexOnly){
+     button.textContent="Nur Nachweis";
+     button.disabled=true;
+     button.title="Dieser WMS-Dienst zeigt die Lage der Aufnahmen, aber keine Luftbild-Rasterebene.";
+     return;
+   }
    button.textContent=entry.overlay?(overlayActive()?"Ausblenden":"Einblenden"):(alreadyMap()?"Vorhanden":"+ Hinzufügen");
    button.disabled=!entry.overlay&&alreadyMap();
   }
   refreshes.push(refreshButton);
   refreshButton();
   button.addEventListener("click",async()=>{
+   if(entry.indexOnly)return;
    button.disabled=true;button.textContent="Verbinde …";status.textContent="Prüfe Kartendienst "+entry.title+" …";
    try{
     if(entry.overlay&&overlayActive()){
