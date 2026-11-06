@@ -3,7 +3,7 @@
 "use strict";
 const SERVICE="https://histomapberlin.de:8443/geoserver/histomap/wms";
 const HOME="https://histomapberlin.de/";
-const CACHE_KEY="atlas-histomap-capabilities-v4-works";
+const CACHE_KEY="atlas-histomap-capabilities-v5-berlin-sheets";
 const CACHE_AGE=5*24*60*60*1000;
 let catalogData=null,loading=null;
 const $=(n,id)=>n.querySelector("#"+id);
