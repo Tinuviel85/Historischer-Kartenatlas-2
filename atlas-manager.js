@@ -550,7 +550,7 @@
     histoPanel.appendChild(histoNote);
     discover.appendChild(histoPanel);
     if (window.AtlasGeoportal) window.AtlasGeoportal.mount({
-      parent:el("managerDiscover"),maps:maps,add:upsert
+      parent:el("managerDiscover"),maps:maps,preview:previewDiscoveredMap
     });
     // Persist the migrated tree card once, including its stable ID.
     // Other user maps, hidden state and favorites remain unchanged.
