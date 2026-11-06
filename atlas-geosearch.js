@@ -87,8 +87,18 @@ function metadataDetails(label,fields,xml,filename){
    const row=node("div",null,"metadata-row");
    const name=node("b",field.name||"Metadaten");
    const link=safeLink(field.value);
-   const v=link?node("a",String(field.value)):node("span",String(field.value));
-   if(link){v.href=link;v.target="_blank";v.rel="noopener noreferrer";}
+   let v;
+   if(link){
+     v=node("a",String(field.value));v.href=link;v.target="_blank";v.rel="noopener noreferrer";
+   }else{
+     v=node("button",String(field.value),"metadata-copy");
+     v.type="button";v.title="Wert kopieren";
+     v.setAttribute("aria-label",(field.name||"Metadaten")+": Wert kopieren");
+     v.addEventListener("click",async()=>{
+       try{await navigator.clipboard.writeText(String(field.value));v.title="Kopiert";setTimeout(()=>v.title="Wert kopieren",1700);}
+       catch(_){window.prompt("Metadatenwert kopieren:",String(field.value));}
+     });
+   }
    row.append(name,v);list.appendChild(row);
   }
   details.appendChild(list);
@@ -135,7 +145,7 @@ function yearOf(name){
 function mount({parent,maps,add,capabilities}){
  if(!parent||!add||!capabilities)return;
  const styles=node("style");
- styles.textContent=".gdi-browser{border:1px solid #c6d8c7;border-radius:12px;background:#fff;padding:12px;margin:12px 0}.gdi-browser h3{margin:0 0 8px;font-size:14px;color:#214939}.gdi-browser p,.gdi-browser .gdi-small{font-size:11px;line-height:1.5;color:#5d7869}.gdi-browser form{display:flex;gap:7px}.gdi-browser input{min-width:0;flex:1;border:1px solid #c6d8cb;border-radius:9px;padding:11px;font-size:13px}.gdi-browser button{border:1px solid #bfd5c5;border-radius:9px;padding:9px;font-size:12px;color:#214d3a;font-weight:700;background:#f1f8f1}.gdi-browser button.primary{background:#245544;color:#fff}.gdi-browser button:disabled{opacity:.5}.gdi-browser .themes{display:flex;gap:6px;overflow-x:auto;padding:9px 0;scrollbar-width:thin}.gdi-browser .themes button{flex:none;white-space:nowrap}.gdi-browser .catalog-result{padding:10px 0;border-top:1px solid #e2ece4}.gdi-browser .catalog-result strong{display:block;font-size:12px;overflow-wrap:anywhere}.gdi-browser .catalog-result small{display:block;color:#6d8074;font-size:11px;margin:3px 0 7px}.gdi-browser .catalog-result button{margin:3px 5px 3px 0}.gdi-browser .catalog-layers{padding:5px 0 5px 10px;border-left:2px solid #b4d3bc}.gdi-browser .catalog-layer{padding:8px 0;border-bottom:1px dashed #dce6de;display:flex;gap:6px;justify-content:space-between;align-items:center}.gdi-browser .catalog-layer span{font-size:11px;min-width:0;overflow-wrap:anywhere}.gdi-browser .catalog-layer button{white-space:nowrap;flex:none}.gdi-browser .catalog-status{font-size:11px;line-height:1.4;margin:8px 0;color:#486a58}.gdi-browser .browse-footer{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:9px 0}.gdi-browser a{color:#245e47}.gdi-browser .geo-metadata{margin:10px 0;border:1px solid #dae6de;border-radius:9px;padding:9px;background:#f7faf7}.gdi-browser .geo-metadata>summary{font-size:12px;font-weight:750;color:#28563f;cursor:pointer;line-height:1.4}.gdi-browser .geo-metadata .metadata-scroll{max-height:45dvh;overflow-y:auto;margin-top:9px}.gdi-browser .metadata-row{display:grid;grid-template-columns:minmax(0,38%) minmax(0,62%);gap:9px;padding:7px 1px;border-bottom:1px solid #e6eee7;font-size:11px;line-height:1.4}.gdi-browser .metadata-row b{color:#4e7061;font-weight:650;overflow-wrap:anywhere}.gdi-browser .metadata-row span{overflow-wrap:anywhere;white-space:pre-wrap}.gdi-browser .metadata-row a{overflow-wrap:anywhere}.gdi-browser .metadata-actions{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}.gdi-browser .metadata-error{color:#a44935;font-size:11px}.gdi-browser .catalog-layer{flex-wrap:wrap}.gdi-browser .catalog-layer>.geo-metadata{width:100%;margin:2px 0}";
+ styles.textContent=".gdi-browser{border:1px solid #c6d8c7;border-radius:12px;background:#fff;padding:12px;margin:12px 0}.gdi-browser h3{margin:0 0 8px;font-size:14px;color:#214939}.gdi-browser p,.gdi-browser .gdi-small{font-size:11px;line-height:1.5;color:#5d7869}.gdi-browser form{display:flex;gap:7px}.gdi-browser input{min-width:0;flex:1;border:1px solid #c6d8cb;border-radius:9px;padding:11px;font-size:13px}.gdi-browser button{border:1px solid #bfd5c5;border-radius:9px;padding:9px;font-size:12px;color:#214d3a;font-weight:700;background:#f1f8f1}.gdi-browser button.primary{background:#245544;color:#fff}.gdi-browser button:disabled{opacity:.5}.gdi-browser .themes{display:flex;gap:6px;overflow-x:auto;padding:9px 0;scrollbar-width:thin}.gdi-browser .themes button{flex:none;white-space:nowrap}.gdi-browser .catalog-result{padding:10px 0;border-top:1px solid #e2ece4}.gdi-browser .catalog-result strong{display:block;font-size:12px;overflow-wrap:anywhere}.gdi-browser .catalog-result small{display:block;color:#6d8074;font-size:11px;margin:3px 0 7px}.gdi-browser .catalog-result button{margin:3px 5px 3px 0}.gdi-browser .catalog-layers{padding:5px 0 5px 10px;border-left:2px solid #b4d3bc}.gdi-browser .catalog-layer{padding:8px 0;border-bottom:1px dashed #dce6de;display:flex;gap:6px;justify-content:space-between;align-items:center}.gdi-browser .catalog-layer span{font-size:11px;min-width:0;overflow-wrap:anywhere}.gdi-browser .catalog-layer button{white-space:nowrap;flex:none}.gdi-browser .catalog-status{font-size:11px;line-height:1.4;margin:8px 0;color:#486a58}.gdi-browser .browse-footer{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:9px 0}.gdi-browser a{color:#245e47}.gdi-browser .geo-metadata{margin:10px 0;border:1px solid #dae6de;border-radius:9px;padding:9px;background:#f7faf7}.gdi-browser .geo-metadata>summary{font-size:12px;font-weight:750;color:#28563f;cursor:pointer;line-height:1.4}.gdi-browser .geo-metadata .metadata-scroll{max-height:45dvh;overflow-y:auto;margin-top:9px}.gdi-browser .metadata-row{display:grid;grid-template-columns:minmax(0,38%) minmax(0,62%);gap:9px;padding:7px 1px;border-bottom:1px solid #e6eee7;font-size:11px;line-height:1.4}.gdi-browser .metadata-row b{color:#4e7061;font-weight:650;overflow-wrap:anywhere}.gdi-browser .metadata-row span{overflow-wrap:anywhere;white-space:pre-wrap}.gdi-browser .metadata-row a{overflow-wrap:anywhere}.gdi-browser .metadata-actions{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}.gdi-browser .metadata-error{color:#a44935;font-size:11px}.gdi-browser .catalog-layer{flex-wrap:wrap}.gdi-browser .catalog-layer>.geo-metadata{width:100%;margin:2px 0}.gdi-browser .metadata-copy{display:block;width:100%;font-weight:400;text-align:left;color:#28493c;background:transparent;border:0;margin:0;padding:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4;cursor:copy}.gdi-browser .metadata-copy:hover{text-decoration:underline}";
  document.head.appendChild(styles);
  const box=node("section",null,"gdi-browser");
  const title=node("h3","Gesamten Berliner Geodatenkatalog durchsuchen");
@@ -179,6 +189,13 @@ function mount({parent,maps,add,capabilities}){
   external.target="_blank";external.rel="noopener noreferrer";
   const serviceMetadata=metadataDetails("Alle Metadaten · "+(entry.metadata?.length||0)+" Angaben",
    entry.metadata||[],entry.metadataXml||null,"berlin-geodaten-metadaten.xml");
+  const metadataId=String(entry.recordId||"").trim();
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(metadataId)){
+    const officialMeta=node("a","Metadatensatz im amtlichen Katalog");
+    officialMeta.href="https://gdi.berlin.de/geonetwork/srv/ger/catalog.search#/metadata/"+metadataId;
+    officialMeta.target="_blank";officialMeta.rel="noopener noreferrer";
+    serviceMetadata.appendChild(officialMeta);
+  }
   row.append(t,desc,serviceMetadata,open,external,layerBox);results.appendChild(row);
   open.addEventListener("click",async()=>{
    if(!layerBox.hidden){layerBox.hidden=true;open.textContent="Kartenebenen anzeigen";return;}
