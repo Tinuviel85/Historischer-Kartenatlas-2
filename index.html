@@ -275,6 +275,16 @@
       .tools-menu .zoom-panel{gap:0!important}
     }
     @media(prefers-reduced-motion:reduce){.tools-menu>*{animation:none!important}}
+    .atlas-preview-bar{position:absolute;z-index:1010;left:18px;right:18px;bottom:calc(154px + env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;background:rgba(252,254,252,.96);border:1px solid #bdd6c5;border-radius:17px;padding:12px 14px;box-shadow:0 12px 28px rgba(16,49,32,.21);-webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px)}
+    .atlas-preview-caption{flex:1 1 130px;min-width:0;display:grid;gap:3px}
+    .atlas-preview-caption small{font-size:9px;letter-spacing:.65px;color:#597460;font-weight:750}
+    .atlas-preview-caption strong{font-size:13px;color:#244b3d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .atlas-preview-actions{display:flex;gap:7px;flex:0 0 auto}
+    .atlas-preview-actions button{border-radius:10px;border:1px solid #bfd2c1;padding:10px 11px;cursor:pointer;font-size:12px;font-weight:750}
+    .atlas-preview-actions .preview-save{background:#245744;border-color:#245744;color:#fff}
+    .atlas-preview-actions .preview-discard{background:#f3f6f2;color:#365545}
+    .atlas-preview-actions button:disabled{opacity:.5}
+    @media(max-width:680px){.atlas-preview-bar{left:12px;right:12px;bottom:calc(141px + env(safe-area-inset-bottom));padding:11px;gap:8px}.atlas-preview-actions{width:100%}.atlas-preview-actions button{flex:1}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
   </style>
 </head>
@@ -419,6 +429,13 @@
           <div class="detail-desc"><div id="detailTitle"></div><div id="detailYear"></div><div id="detailRegion"></div><div id="detailProvider"></div><div style="margin-top:5px">Urheberrechte und Lizenz beim jeweiligen Kartenanbieter prüfen.</div></div>
         </div>
       </div>
+      <div id="atlasPreviewBar" class="atlas-preview-bar" hidden role="region" aria-label="Kartenvorschau">
+        <div class="atlas-preview-caption"><small>VORSCHAU · NOCH NICHT GESPEICHERT</small><strong id="atlasPreviewTitle"></strong></div>
+        <div class="atlas-preview-actions">
+          <button id="atlasPreviewDiscard" type="button" class="preview-discard">Verwerfen</button>
+          <button id="atlasPreviewSave" type="button" class="preview-save">Karte speichern</button>
+        </div>
+      </div>
       <div class="map-bottom">
         <div id="compareRangeBox" class="compare-range-box"><span>Gewählte Karte</span><input id="compareRange" type="range" min="0" max="100" value="50" step="1" aria-label="Position des Kartenvergleichs"><span>Grundkarte</span></div>
         <div class="timeline" aria-label="Karten verschiedener Zeitstände">
@@ -541,7 +558,7 @@
       try { savedFavorites=JSON.parse(localStorage.getItem('historischer-atlas-favoriten')||'[]'); if(!Array.isArray(savedFavorites))savedFavorites=[]; } catch (_) { savedFavorites=[]; }
       let favorites=new Set(savedFavorites.filter(Number.isInteger));
       let regionFilter='Berlin';
-      let active=null, layer=null, mode='overlay', opacity=.78, split=.5;
+      let active=null, layer=null, preview=null, mode='overlay', opacity=.78, split=.5;
       let gpsAccuracy=null, gpsWatchId=null, gpsKnownPosition=null, gpsLastAccuracy=null, compassHeading=null, compassListening=false;
       let autoFollowCamera=false, firstFollowFix=false, gpsCameraMove=false;
       let detailOpen=false, toastTimer=null, searchAbort=null;
@@ -815,11 +832,12 @@
       }
       $('mapSearch').addEventListener('input',renderList);
       function applyPane(){
-        if(!layer)return;
+        const displayed=preview?.layer||layer;
+        if(!displayed)return;
         const cut=(100-split*100).toFixed(2);
         // An der nicht transformierten Kartenfläche clippen: iOS Safari/Edge stabil.
         $('historicalMap').style.clipPath=mode==='compare'?`inset(0 ${cut}% 0 0)`:'inset(0 0 0 0)';
-        layer.setOpacity(mode==='compare'?1:opacity);
+        displayed.setOpacity(mode==='compare'?1:opacity);
       }
       function setSplit(value){
         split=Math.max(0,Math.min(1,Number(value)));
@@ -920,8 +938,80 @@
         $('prevYear').onclick=()=>{if(pos>0)selectMap(timeline[pos-1].id);};
         $('nextYear').onclick=()=>{if(pos>=0&&pos<timeline.length-1)selectMap(timeline[pos+1].id);};
       }
+      function createDisplayLayer(m){
+        return m.type==='geoportal'
+          ? window.AtlasGeoportal.createLayer(L,m.sourceUrl,(message)=>setNotice(message,6500),{layerName:m.layerName})
+          : m.type==='histomap'
+            ? window.AtlasHistoMap.createFullYearLayer(L,m.year,(message)=>setNotice(message,5500),m.layerName)
+            : m.type==='wms'
+              ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
+              : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true});
+      }
+      function discardPreview(restore=true){
+        if(!preview)return;
+        if(preview.layer&&historicalMap.hasLayer(preview.layer))historicalMap.removeLayer(preview.layer);
+        preview=null;
+        $('atlasPreviewBar').hidden=true;
+        $('atlasPreviewSave').disabled=false;
+        if(restore&&layer&&!historicalMap.hasLayer(layer))layer.addTo(historicalMap);
+        if(!layer&&restore){
+          $('historicalMap').style.clipPath='inset(0)';
+          $('compareMode').disabled=true;
+        }
+        if(active){
+          $('sourceAttributionLink').href=active.detailUrl;
+          $('sourceAttributionLink').textContent=active.provider.replace(' (alte Adresse)','');
+          $('sourceAttributionLink').hidden=false;
+        }else $('sourceAttributionLink').hidden=true;
+        applyPane();
+      }
+      function previewMap(item){
+        if(!item?.sourceUrl||!/^https?:\/\//i.test(item.sourceUrl))
+          throw Error("Die Vorschau benötigt eine gültige Kartenadresse.");
+        discardPreview(true);
+        if(layer&&historicalMap.hasLayer(layer))historicalMap.removeLayer(layer);
+        const m={...item,region:item.region||'Berlin',name:item.name||'Neue Karte',
+          provider:item.provider||'Kartenanbieter',layerName:item.layerName||'auto'};
+        if(!regionDefinitions[m.region])m.region='Berlin';
+        try{
+          const source=window.AtlasGeoportal?.services.find(e=>m.sourceUrl==='https://gdi.berlin.de/services/wms/'+e.slug);
+          if(m.region==='Berlin'&&(!active||active.region!=='Berlin')){
+            map.setView(regionDefinitions.Berlin.center,Math.max(13,source?.focusZoom||13),{animate:false});
+          }else if(source?.focusZoom&&map.getZoom()<source.focusZoom)map.setZoom(source.focusZoom,{animate:false});
+          syncHistorical();
+          preview={item:{...item},layer:createDisplayLayer(m)};
+          preview.layer.addTo(historicalMap);
+          $('atlasPreviewTitle').textContent=m.name;
+          $('atlasPreviewBar').hidden=false;
+          $('sourceAttributionLink').href=m.detailUrl||m.sourceUrl;
+          $('sourceAttributionLink').textContent=m.provider;
+          $('sourceAttributionLink').hidden=false;
+          $('compareMode').disabled=false;
+          applyPane();
+          $('managerDialog')?.close();
+          $('sidebar').classList.remove('open');
+          setNotice('Vorschau geöffnet. Prüfe die Karte und speichere sie nur, wenn du sie behalten möchtest.',4200);
+        }catch(error){
+          discardPreview(true);
+          throw error;
+        }
+      }
+      $('atlasPreviewDiscard').addEventListener('click',()=>discardPreview(true));
+      $('atlasPreviewSave').addEventListener('click',async()=>{
+        if(!preview)return;
+        const item={...preview.item};
+        $('atlasPreviewSave').disabled=true;
+        try{
+          await window.atlasManager.saveDiscoveredMap(item);
+          setNotice('Karte in deiner Sammlung gespeichert.',3800);
+        }catch(error){
+          $('atlasPreviewSave').disabled=false;
+          setNotice('Speichern nicht möglich: '+error.message,6500);
+        }
+      });
       function selectMap(id,{restoreView=false}={}){
         const m=maps[id];if(!m||m.hidden)return;
+        discardPreview(false);
         const previous=active;
         dismissNotice();
         if(layer){historicalMap.removeLayer(layer);layer=null;}
@@ -937,14 +1027,7 @@
             map.setZoom(source.focusZoom,{animate:false});
         }
         syncHistorical();
-        layer=(m.type==='geoportal'
-          ? window.AtlasGeoportal.createLayer(L,m.sourceUrl,(message)=>setNotice(message,6500),{layerName:m.layerName})
-          : m.type==='histomap'
-            ? window.AtlasHistoMap.createFullYearLayer(L,m.year,(message)=>setNotice(message,5500),m.layerName)
-          : m.type==='wms'
-            ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
-            : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true})
-        ).addTo(historicalMap);
+        layer=createDisplayLayer(m).addTo(historicalMap);
         applyPane();
         $('sourceAttributionLink').href=m.detailUrl;
         $('sourceAttributionLink').textContent=m.provider.replace(' (alte Adresse)','');
@@ -1157,7 +1240,7 @@
         else updateTimeline();
         setMode(active&&p.get('modus')==='compare'?'compare':'overlay');
       }
-      window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
+      window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,previewMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
       $('compareMode').disabled=true;
       renderRegions();
       restoreFromHash();
