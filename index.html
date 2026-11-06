@@ -423,8 +423,8 @@
   </dialog>
   <script src="atlas-config.js"></script>
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
-  <script src="atlas-histomap.js?v=20261106-fullcity2"></script>
-  <script src="atlas-manager.js?v=20261106-fullcity"></script>
+  <script src="atlas-histomap.js?v=20261106-works"></script>
+  <script src="atlas-manager.js?v=20261106-works"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -750,7 +750,7 @@
         focusMap(m,previous,restoreView);
         syncHistorical();
         layer=(m.type==='histomap'
-          ? window.AtlasHistoMap.createFullYearLayer(L,m.year,(message)=>setNotice(message,5500))
+          ? window.AtlasHistoMap.createFullYearLayer(L,m.year,(message)=>setNotice(message,5500),m.layerName)
           : m.type==='wms'
             ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
             : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true})
