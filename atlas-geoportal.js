@@ -187,6 +187,85 @@ function createLayer(L,url,onError,options={}){
  });
  return new ViewWMS();
 }
+const TREE_WFS="https://gdi.berlin.de/services/wfs/baumbestand";
+let treeTypeNames=null,treeLookup=null;
+async function treeTypes(){
+ if(treeTypeNames)return treeTypeNames;
+ if(treeLookup)return treeLookup;
+ treeLookup=(async()=>{
+  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),12000);
+  try{
+   const res=await fetch(TREE_WFS+"?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities",{signal:ctl.signal,mode:"cors"});
+   if(!res.ok)throw Error("WFS HTTP "+res.status);
+   const xml=new DOMParser().parseFromString(await res.text(),"application/xml");
+   if(xml.getElementsByTagName("parsererror").length)throw Error("WFS-Katalog unlesbar");
+   let names=Array.from(xml.getElementsByTagNameNS("*","FeatureType"))
+     .map(t=>directText(t,"Name")).filter(Boolean);
+   names=names.filter(n=>/baum|tree/i.test(n));
+   if(!names.length)throw Error("Der WFS nennt keine Baumdatensätze");
+   treeTypeNames=names.slice(0,5);
+   return treeTypeNames;
+  }finally{clearTimeout(timer);}
+ })();
+ try{return await treeLookup;}finally{treeLookup=null;}
+}
+async function getTreeInfo(map,L,latlng){
+ const px=map.latLngToContainerPoint(latlng),tolerance=13;
+ const a=map.containerPointToLatLng(L.point(px.x-tolerance,px.y+tolerance));
+ const b=map.containerPointToLatLng(L.point(px.x+tolerance,px.y-tolerance));
+ const sw=L.CRS.EPSG3857.project(a),ne=L.CRS.EPSG3857.project(b);
+ const bbox=[Math.min(sw.x,ne.x),Math.min(sw.y,ne.y),Math.max(sw.x,ne.x),Math.max(sw.y,ne.y),"EPSG:3857"].join(",");
+ let error=null;
+ try {
+  const types=await treeTypes();
+  for(const type of types){
+   const p=new URLSearchParams({SERVICE:"WFS",VERSION:"2.0.0",REQUEST:"GetFeature",
+    typeNames:type,outputFormat:"application/json",srsName:"EPSG:3857",COUNT:"12",BBOX:bbox});
+   const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),11000);
+   try{
+    const response=await fetch(TREE_WFS+"?"+p.toString(),{mode:"cors",signal:ctl.signal});
+    if(!response.ok)throw Error("WFS HTTP "+response.status);
+    const data=await response.json();
+    if(data.type!=="FeatureCollection"||!Array.isArray(data.features))throw Error("Kein GeoJSON");
+    if(data.features.length){
+      const point=L.CRS.EPSG3857.project(latlng);
+      const ranked=data.features.slice().sort((a,b)=>{
+       function dist(f){
+         const coords=f?.geometry?.type==="Point"?f.geometry.coordinates:null;
+         return coords&&coords.length>=2?(Number(coords[0])-point.x)**2+(Number(coords[1])-point.y)**2:0;
+       }
+       return dist(a)-dist(b);
+      });
+      return {properties:ranked[0].properties||{},source:"WFS Berlin",count:data.features.length};
+    }
+   }finally{clearTimeout(timer);}
+  }
+ }catch(e){error=e;}
+ // Some WMS layers support GetFeatureInfo even when their WFS cannot be
+ // requested from another origin; use its advertised formats and layer names.
+ try{
+  const url=urlFor("trees"),caps=await capabilities(url);
+  const choices=caps.leaves.filter(l=>/baum|tree/i.test(l.name+" "+l.title));
+  const layers=(choices.length?choices:caps.leaves).map(l=>l.name).slice(0,6);
+  if(layers.length){
+   const bounds=map.getBounds(),size=map.getSize();
+   const p=wmsImage(layers,bounds,L,size);
+   p.set("REQUEST","GetFeatureInfo");
+   p.set("LAYERS",layers.join(","));p.set("QUERY_LAYERS",layers.join(","));
+   p.set("X",String(Math.max(0,Math.min(size.x-1,Math.round(px.x)))));
+   p.set("Y",String(Math.max(0,Math.min(size.y-1,Math.round(px.y)))));
+   p.set("INFO_FORMAT","application/json");p.set("FEATURE_COUNT","5");
+   const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),12000);
+   try{
+    const response=await fetch(url+"?"+p.toString(),{mode:"cors",signal:ctl.signal});
+    if(!response.ok)throw Error("WMS GetFeatureInfo HTTP "+response.status);
+    const result=await response.json();
+    if(result.features?.length)return {properties:result.features[0].properties||{},source:"WMS Berlin",count:result.features.length};
+   }finally{clearTimeout(timer);}
+  }
+ }catch(e){error=error||e;}
+ return {properties:null,source:"Geoportal Berlin",error:error?.message||null};
+}
 function mount({parent,maps,add,overlayState=[],updateOverlay}){
  if(!parent||!add)return;
  const style=document.createElement("style");
@@ -244,5 +323,5 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
  }
  wrap.addEventListener("toggle",()=>{if(wrap.open)refreshes.forEach(fn=>fn());});
 }
-window.AtlasGeoportal={mount,createLayer,capabilities,allowedUrl,services:SERVICES};
+window.AtlasGeoportal={mount,createLayer,capabilities,allowedUrl,getTreeInfo,services:SERVICES};
 })();
