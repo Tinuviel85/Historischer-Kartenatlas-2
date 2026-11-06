@@ -486,13 +486,36 @@
       }
       api.setGeoportalOverlay(entry,enabled);
       persist();
+      reflectTrees();
+    }
+    function reflectTrees(){
+      var b=document.getElementById("treesToggle");
+      if(!b)return;
+      var enabled=geoportalOverlays.some(function(o){return o.id==="trees";});
+      b.setAttribute("aria-pressed",String(enabled));
+      b.title=enabled?"Baumbestand ausblenden":"Baumbestand anzeigen";
+    }
+    async function toggleTrees(){
+      var entry=window.AtlasGeoportal?.services.find(function(o){return o.id==="trees";});
+      if(!entry)return;
+      var btn=document.getElementById("treesToggle");
+      if(btn)btn.disabled=true;
+      try {
+        var enabled=geoportalOverlays.some(function(o){return o.id==="trees";});
+        if(!enabled)await window.AtlasGeoportal.capabilities("https://gdi.berlin.de/services/wms/"+entry.slug);
+        updateGeoportalOverlay({id:"trees",sourceUrl:"https://gdi.berlin.de/services/wms/"+entry.slug},!enabled);
+        api.setNotice(enabled?"Baumbestand ausgeblendet.":"Baumbestand eingeschaltet (bei größerem Kartenzoom sichtbar).",4200);
+      } catch(e) {
+        api.setNotice("Der Baumbestand konnte nicht geladen werden: "+e.message,6500);
+      } finally {if(btn)btn.disabled=false;reflectTrees();}
     }
     if (window.AtlasGeoportal) window.AtlasGeoportal.mount({
       parent:el("managerDiscover"),maps:maps,add:upsert,
       overlayState:geoportalOverlays,updateOverlay:updateGeoportalOverlay
     });
     geoportalOverlays.forEach(function(entry){api.setGeoportalOverlay(entry,true);});
-    return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap};
+    reflectTrees();
+    return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap,toggleTrees:toggleTrees};
   }
   window.AtlasManager = {mount:mount};
 }());
