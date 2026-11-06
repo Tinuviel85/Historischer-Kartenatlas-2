@@ -139,6 +139,7 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
  wrap.innerHTML='<summary>Geoportal Berlin · Luftbilder, Karten &amp; Bäume</summary><p>Amtliche Berliner Geodaten in wenigen Schritten übernehmen. Luftbilder und Karten werden als eigene Karten gespeichert; der aktuelle Baumbestand ist eine zusätzliche Ebene, die du ein- und ausschalten kannst.</p><div id="gdiItems"></div><p class="gdi-status" id="gdiStatus" role="status"></p><p><a href="https://gdi.berlin.de/" target="_blank" rel="noopener noreferrer">Offizielles Geoportal Berlin öffnen</a> · <a href="https://daten.berlin.de/" target="_blank" rel="noopener noreferrer">Daten und Lizenzen</a></p>';
  parent.prepend(wrap);
  const listing=wrap.querySelector("#gdiItems"),status=wrap.querySelector("#gdiStatus");
+ const refreshes=[];
  let activeGroup="";
  for(const entry of SERVICES){
   if(entry.group!==activeGroup){activeGroup=entry.group;listing.appendChild(Object.assign(document.createElement("div"),{className:"gdi-group",textContent:activeGroup}));}
@@ -156,6 +157,7 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
    button.textContent=entry.overlay?(overlayActive()?"Ausblenden":"Einblenden"):(alreadyMap()?"Vorhanden":"+ Hinzufügen");
    button.disabled=!entry.overlay&&alreadyMap();
   }
+  refreshes.push(refreshButton);
   refreshButton();
   button.addEventListener("click",async()=>{
    button.disabled=true;button.textContent="Verbinde …";status.textContent="Prüfe Kartendienst "+entry.title+" …";
@@ -183,6 +185,7 @@ function mount({parent,maps,add,overlayState=[],updateOverlay}){
   });
   row.append(detail,button);listing.appendChild(row);
  }
+ wrap.addEventListener("toggle",()=>{if(wrap.open)refreshes.forEach(fn=>fn());});
 }
 window.AtlasGeoportal={mount,createLayer,capabilities,allowedUrl,services:SERVICES};
 })();
