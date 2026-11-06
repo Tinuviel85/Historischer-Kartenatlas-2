@@ -4,14 +4,14 @@
 "use strict";
 const ROOT="https://gdi.berlin.de/services/wms/";
 const SERVICES=[
- {id:"aerial1928",year:1928,title:"Luftbilder Berlin 1928",group:"Historische Luftbilder",slug:"luftbild_1928_04",note:"Senkrechtaufnahmen 1:4.000; historische Abdeckung nicht überall vollständig"},
- {id:"aerial1938",year:1938,title:"Luftbilder Berlin 1938",group:"Historische Luftbilder",slug:"luftbild_1938_04",note:"Senkrechtaufnahmen 1:4.000; stellenweise Lücken"},
- {id:"aerial1953",year:1953,title:"Luftbilder Berlin 1953",group:"Historische Luftbilder",slug:"luftbild_1953_22",note:"Luftbilder 1:22.000, mit Überlappungen"},
- {id:"aerial1964",year:1964,title:"Luftbilder Berlin 1964",group:"Historische Luftbilder",slug:"luftbild_1964_04",note:"Nur ausgewählte Berliner Teilgebiete"},
- {id:"aerial1989",year:1989,title:"Luftbilder West-Berlin 1989",group:"Historische Luftbilder",slug:"luftbild_1989_04",note:"Teilgebiete West-Berlins; keine vollständige Abdeckung"},
- {id:"aerial2025",year:2025,title:"Digitale Orthophotos Berlin 2025",group:"Aktuelle Luftbilder",slug:"dop_2025_fruehjahr",note:"Aktuelle Luftbilder mit hoher Auflösung"},
- {id:"straube",year:1910,title:"Straubes Übersichtsplan 1910",group:"Historische Karten",slug:"straubeplan",note:"Historische Mitte, 44 Blätter; kein Gesamt-Berlin"},
- {id:"trees",year:null,title:"Baumbestand Berlin",group:"Natur und Umwelt",slug:"baumbestand",note:"Heutige Straßen- und Anlagenbäume (soweit mit Koordinaten); separate Ebene",overlay:true}
+ {id:"aerial1928",year:1928,title:"Luftbilder Berlin 1928",group:"Historische Luftbilder",slug:"luftbild_1928_04",wmsLayers:["c_luftbilder_1928_04_raster"],focusZoom:15,note:"Rasterluftbilder 1:4.000 – bei starker Vergrößerung sichtbar"},
+ {id:"aerial1938",year:1938,title:"Luftbilder Berlin 1938",group:"Historische Luftbilder",slug:"luftbild_1938_04",wmsLayers:["c_luftbilder_1938_04_raster"],focusZoom:15,note:"Rasterluftbilder 1:4.000 – ohne Blattschnitt- und Bildmittenmarkierungen"},
+ {id:"aerial1953",year:1953,title:"Luftbilder Berlin 1953",group:"Historische Luftbilder",slug:"luftbild_1953_22",wmsLayers:["c_luftbilder_1953_22_raster"],focusZoom:14,note:"Original-Luftbilder 1:22.000"},
+ {id:"aerial1964",year:1964,title:"Luftbild-Nachweis Berlin 1964",group:"Historische Luftbilder",slug:"luftbild_1964_04",wmsLayers:[],indexOnly:true,note:"Nur Bildmitten und Gebietsabdeckung – keine Bildrasterkarte in diesem WMS"},
+ {id:"aerial1989",year:1989,title:"Luftbild-Nachweis West-Berlin 1989",group:"Historische Luftbilder",slug:"luftbild_1989_04",wmsLayers:[],indexOnly:true,note:"Nur Bildmitten und Gebietsabdeckung – keine Bildrasterkarte in diesem WMS"},
+ {id:"aerial2025",year:2025,title:"Digitale Orthophotos Berlin 2025",group:"Aktuelle Luftbilder",slug:"dop_2025_fruehjahr",wmsLayers:["dop_2025"],note:"Aktuelle Luftbilder als echte Orthophoto-Rasterebene"},
+ {id:"straube",year:1910,title:"Straubes Übersichtsplan 1910",group:"Historische Karten",slug:"straubeplan",wmsLayers:["straubeplan"],note:"Historische Mitte, 44 Blätter; kein Gesamt-Berlin"},
+ {id:"trees",year:null,title:"Baumbestand Berlin",group:"Natur und Umwelt",slug:"baumbestand",wmsLayers:["strassenbaeume","anlagenbaeume"],note:"Straßen- und Anlagenbäume mit Sachdatenabfrage",overlay:true}
 ];
 const BY_ID=new Map(SERVICES.map(s=>[s.id,s]));
 const cache=new Map();
@@ -38,19 +38,32 @@ function geoBox(layer){
 function parseCapabilities(raw){
  if(raw.length>18000000)throw Error("Die Kartenliste ist zu groß.");
  const xml=new DOMParser().parseFromString(raw,"application/xml");
- if(xml.getElementsByTagName("parsererror").length)throw Error("Der Dienst liefert keine gültige Kartenliste.");
- const layers=Array.from(xml.getElementsByTagNameNS("*","Layer"));
- if(!layers.length)throw Error("Der Dienst nennt keine WMS-Kartenebenen.");
- const crs=Array.from(xml.getElementsByTagNameNS("*","SRS")).concat(Array.from(xml.getElementsByTagNameNS("*","CRS")));
+ if(xml.getElementsByTagName("parsererror").length)throw Error("Ungültige WMS-Kartenliste.");
+ const nodes=Array.from(xml.getElementsByTagNameNS("*","Layer"));
+ if(!nodes.length)throw Error("Keine WMS-Kartenebenen gefunden.");
+ const crs=Array.from(xml.getElementsByTagNameNS("*","SRS"))
+   .concat(Array.from(xml.getElementsByTagNameNS("*","CRS")));
  if(!crs.some(e=>/(^|\s)EPSG:3857(\s|$)/i.test(e.textContent||"")))
-  throw Error("Der Dienst bestätigt keine Darstellung in Web-Mercator (EPSG:3857).");
- const named=layers.map(l=>({name:directText(l,"Name"),title:directText(l,"Title"),group:directChildren(l,"Layer").length>0,box:geoBox(l)}))
-   .filter(l=>l.name);
- if(!named.length)throw Error("Keine benannte Kartenebene gefunden.");
- const group=named.find(l=>l.group&&l.name.length<200);
- const leaves=named.filter(l=>!l.group);
- if(!group&&!leaves.length)throw Error("Kein darstellbares Kartenwerk gefunden.");
- return {group:group?.name||null,leaves:leaves.length?leaves:named};
+   throw Error("Der Dienst bestätigt keine Web-Mercator-Darstellung (EPSG:3857).");
+ const named=nodes.map(layer=>({
+   name:directText(layer,"Name"),title:directText(layer,"Title"),
+   group:directChildren(layer,"Layer").length>0,box:geoBox(layer)
+ })).filter(x=>x.name);
+ return {leaves:named.filter(x=>!x.group)};
+}
+function serviceForUrl(url){return SERVICES.find(entry=>ROOT+entry.slug===url);}
+function selectedWmsLayers(url,info){
+ const entry=serviceForUrl(url);
+ if(!entry||entry.indexOnly)
+  throw Error("Der amtliche Dienst enthält hier nur Blattschnitt und Bildmitten, keine Luftbild-Rasterebene.");
+ const selected=[];
+ for(const id of entry.wmsLayers||[]){
+  const layer=info.leaves.find(x=>x.name===id||x.name.endsWith(":"+id));
+  if(layer)selected.push(layer);
+ }
+ if(!selected.length)
+  throw Error("Der amtliche Dienst nennt die erwartete Bildraster-Ebene nicht. Es wird keine Blattschnittübersicht statt eines Fotos angezeigt.");
+ return selected;
 }
 async function capabilities(url,force=false){
  if(!allowedUrl(url))throw Error("Unbekannter Geodienst.");
@@ -62,7 +75,7 @@ async function capabilities(url,force=false){
    const response=await fetch(url+"?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetCapabilities",
     {signal:ctl.signal,mode:"cors"});
    if(!response.ok)throw Error("HTTP "+response.status);
-   const info=parseCapabilities(await response.text());cache.set(url,info);return info;
+   const info=parseCapabilities(await response.text());selectedWmsLayers(url,info);cache.set(url,info);return info;
   }finally{clearTimeout(timer);}
  })();
  pending.set(url,request);
@@ -121,19 +134,9 @@ function createLayer(L,url,onError,options={}){
    if(seq!==this._sequence||!this._map)return;
    const bounds=map.getBounds(),size=map.getSize();
    if(!size.x||!size.y)return;
-   const area=[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()];
-   const touches=box=>!box||(box[0]<=area[2]&&box[2]>=area[0]&&box[1]<=area[3]&&box[3]>=area[1]);
-   const leaves=info.leaves.filter(l=>touches(l.box));
-   let batches=[];
-   if(leaves.length===1)batches=[[leaves[0].name]];
-   else if(leaves.length>1&&leaves.length<=12) {
-     for(let i=0;i<leaves.length;i+=4)batches.push(leaves.slice(i,i+4).map(l=>l.name));
-   } else if(info.group){
-     batches=[[info.group]];
-   } else {
-     for(let i=0;i<Math.min(leaves.length,50);i+=5)
-       batches.push(leaves.slice(i,i+5).map(l=>l.name));
-   }
+   // Never request a whole WMS group: it overlays the red image-centre
+   // and footprint index layers on the actual photographic imagery.
+   const batches=selectedWmsLayers(url,info).map(x=>[x.name]);
    if(!batches.length){this._images.forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});this._images=[];return;}
    // Max image dimensions protect phones and meet common WMS server limits.
    const factor=Math.min(1,1700/Math.max(size.x,size.y));
