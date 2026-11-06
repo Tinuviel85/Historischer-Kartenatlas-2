@@ -312,7 +312,7 @@ function parsePlainInfo(raw){
  if(!Object.keys(props).length)props["Auskunft des Kartendienstes"]=text.slice(0,20000);
  return featureList([{properties:props}]);
 }
-async function getFeatureInfo(map,L,latlng,url,layerName){
+async function getWMSFeatureInfo(map,L,latlng,url,layerName){
  if(!allowedUrl(url))throw Error("Unbekannter Berliner Kartendienst.");
  const caps=await capabilities(url);
  const layers=selectedWmsLayers(url,caps,layerName);
@@ -365,6 +365,63 @@ async function getFeatureInfo(map,L,latlng,url,layerName){
  return {...(empty||featureList([])),
   error:lastError&&!empty?"Die Sachdaten konnten nicht abgerufen werden: "+lastError.message:
     "An dieser Stelle meldet der Dienst keine abfragbaren Kartenobjekte."};
+}
+// Berlin's official B-Plan WFS exposes procedural fields and links to
+// Planzeichnung, Begründung and Bebauungsplan files even if GetFeatureInfo
+// is not queryable for the corresponding WMS layer.
+const BPLAN_WFS="https://gdi.berlin.de/services/wfs/bplan";
+let bplanTypeNames=null,bplanTypesLoading=null;
+async function bplanTypes(){
+ if(bplanTypeNames)return bplanTypeNames;
+ if(bplanTypesLoading)return bplanTypesLoading;
+ bplanTypesLoading=(async()=>{
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12500);
+  try{
+   const response=await fetch(BPLAN_WFS+"?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetCapabilities",
+     {mode:"cors",signal:controller.signal});
+   if(!response.ok)throw Error("B-Plan-WFS HTTP "+response.status);
+   const xml=new DOMParser().parseFromString(await response.text(),"application/xml");
+   if(xml.getElementsByTagName("parsererror").length)throw Error("WFS-Metadaten unlesbar");
+   const types=Array.from(xml.getElementsByTagNameNS("*","FeatureType"))
+     .map(element=>directText(element,"Name")).filter(Boolean);
+   if(!types.length)throw Error("Keine Bebauungsplan-Objekte im WFS");
+   const relevant=types.filter(name=>/bplan|bebau|plan|verfahren|festgesetz|rechtskraft/i.test(name));
+   bplanTypeNames=(relevant.length?relevant:types).slice(0,8);
+   return bplanTypeNames;
+  }finally{clearTimeout(timer);}
+ })();
+ try{return await bplanTypesLoading;}finally{bplanTypesLoading=null;}
+}
+async function queryBPlanWFS(map,L,latlng){
+ const names=await bplanTypes();
+ const location=map.latLngToContainerPoint(latlng);
+ const radius=6;
+ const swLatLng=map.containerPointToLatLng(L.point(location.x-radius,location.y+radius));
+ const neLatLng=map.containerPointToLatLng(L.point(location.x+radius,location.y-radius));
+ const a=L.CRS.EPSG3857.project(swLatLng),b=L.CRS.EPSG3857.project(neLatLng);
+ const bbox=[Math.min(a.x,b.x),Math.min(a.y,b.y),Math.max(a.x,b.x),Math.max(a.y,b.y),"EPSG:3857"].join(",");
+ const queries=names.map(async name=>{
+  const p=new URLSearchParams({SERVICE:"WFS",VERSION:"2.0.0",REQUEST:"GetFeature",
+   typeNames:name,outputFormat:"application/json",srsName:"EPSG:3857",COUNT:"12",BBOX:bbox});
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+  try{
+   const response=await fetch(BPLAN_WFS+"?"+p.toString(),{mode:"cors",signal:controller.signal});
+   if(!response.ok)throw Error("WFS HTTP "+response.status);
+   const body=await response.json();
+   if(body.type!=="FeatureCollection"||!Array.isArray(body.features))throw Error("Keine GeoJSON-Objekte");
+   return body.features.map(feature=>({properties:feature.properties||{},label:name}));
+  }finally{clearTimeout(timer);}
+ });
+ const responses=await Promise.allSettled(queries);
+ const records=responses.filter(v=>v.status==="fulfilled").flatMap(v=>v.value);
+ if(records.length){
+  // WFS types can overlap; do not hide simultaneously applicable plans.
+  return {...featureList(records.slice(0,25)),source:"Bebauungspläne Berlin · WFS"};
+ }
+ const firstError=responses.find(r=>r.status==="rejected");
+ if(firstError&&responses.every(r=>r.status==="rejected"))
+  throw firstError.reason;
+ return {...featureList([]),error:"Für diesen Punkt sind im Berliner Bebauungsplan-WFS keine Planobjekte verzeichnet."};
 }
 const TREE_WFS="https://gdi.berlin.de/services/wfs/baumbestand";
 let treeTypeNames=null,treeLookup=null;
@@ -499,6 +556,15 @@ function mount({parent,maps,add}){
  }
  wrap.addEventListener("toggle",()=>{if(wrap.open)refreshes.forEach(fn=>fn());});
  if(window.AtlasGeoSearch)window.AtlasGeoSearch.mount({parent:wrap,maps,add,capabilities});
+}
+async function getFeatureInfo(map,L,latlng,url,layerName){
+ if(/\/bplan$/i.test(url)){
+  try{
+   const plans=await queryBPlanWFS(map,L,latlng);
+   if(plans.features?.length)return plans;
+  }catch(_){/* WMS GetFeatureInfo remains available as fallback. */}
+ }
+ return getWMSFeatureInfo(map,L,latlng,url,layerName);
 }
 window.AtlasGeoportal={mount,createLayer,capabilities,allowedUrl,getTreeInfo,getFeatureInfo,services:SERVICES};
 })();
