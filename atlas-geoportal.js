@@ -354,7 +354,10 @@ async function getFeatureInfo(map,L,latlng,url,layerName){
    }else if(/html/i.test(format))result=parseHTMLInfo(body);
    else if(/(?:xml|gml)/i.test(format))result=parseXMLInfo(body);
    else result=parsePlainInfo(body);
-   if(result.features.length)return {...result,source:"Geoportal Berlin ("+format+")"};
+   // A response with feature geometry but no attributes is not useful:
+   // try the next available output format (often HTML with plan PDF links).
+   if(result.features.some(feature=>Object.keys(feature.properties||{}).length>0))
+     return {...result,source:"Geoportal Berlin ("+format+")"};
    empty=result;
   }catch(e){lastError=e;}
   finally{clearTimeout(timer);}
