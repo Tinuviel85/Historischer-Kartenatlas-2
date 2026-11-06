@@ -590,57 +590,77 @@
         baumhoehe:"Baumhöhe (m)",bezirk:"Bezirk",eigentuemer:"Eigentümer",
         kategorie:"Kategorie",art:"Baumart"
       };
-      function treePopup(data){
+      function featurePopup(data,selected){
         const root=document.createElement('div');root.className='tree-popup';
-        const header=document.createElement('strong');header.textContent='Baumbestand Berlin';
+        const tree=selected?.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand';
+        const header=document.createElement('strong');
+        header.textContent=tree?'Baumbestand Berlin':selected?.displayName||'Kartendaten';
         root.appendChild(header);
         const props=data?.properties;
         if(props&&Object.keys(props).length){
           const table=document.createElement('dl');table.className='tree-properties';
           let count=0;
           for(const [key,v] of Object.entries(props)){
-            if(v===null||v===undefined||v===''||typeof v==='object'||/^(geom|geometry|the_geom|shape|bbox|id)$/i.test(key))continue;
+            if(v===undefined)continue;
             const dt=document.createElement('dt');
-            dt.textContent=treeLabels[key.toLowerCase()]||key.replace(/[_-]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-            const dd=document.createElement('dd');dd.textContent=String(v);
-            table.append(dt,dd);
-            if(++count>=35)break;
+            dt.textContent=treeLabels[key.toLowerCase()]||
+              key.replace(/[_-]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+            const dd=document.createElement('dd');
+            const value=v===null?'–':typeof v==='object'?JSON.stringify(v):String(v);
+            const link=/^https?:\/\/\S+$/i.test(value)?value:null;
+            if(link){
+              const a=document.createElement('a');a.href=link;a.textContent=value;
+              a.target='_blank';a.rel='noopener noreferrer';dd.appendChild(a);
+            }else dd.textContent=value;
+            table.append(dt,dd);count++;
           }
           if(count)root.appendChild(table);
-          else {const p=document.createElement('p');p.textContent='Für diesen Baum sind keine weiteren Sachdaten hinterlegt.';root.appendChild(p);}
+          else {
+            const p=document.createElement('p');
+            p.textContent='Zu diesem Objekt hat der Dienst keine weiteren Sachdaten übermittelt.';
+            root.appendChild(p);
+          }
           if(data.count>1){
-            const note=document.createElement('small');note.textContent='Mehrere Bäume in der Nähe; der erste Treffer wird angezeigt.';root.appendChild(note);
+            const note=document.createElement('small');
+            note.textContent=data.count+' Objekte im Abfragebereich; ein Treffer wird angezeigt.';
+            root.appendChild(note);
           }
         }else{
           const p=document.createElement('p');
-          p.textContent='Für diesen Punkt wurden keine einzelnen Baumdaten gefunden. Versuche, direkt auf ein Baumsymbol zu tippen.'+
-            (data?.error?' Der Datendienst konnte auch eingeschränkt erreichbar sein.':'');
+          p.textContent=data?.error||'Für diesen Punkt sind keine Objektdaten verfügbar.';
           root.appendChild(p);
         }
         const source=document.createElement('a');
-        source.href='https://gdi.berlin.de/view/baumbestand';
-        source.target='_blank';source.rel='noopener noreferrer';source.textContent='Im Geoportal prüfen';
+        source.href=selected?.detailUrl||'https://gdi.berlin.de/';
+        source.target='_blank';source.rel='noopener noreferrer';
+        source.textContent='Quelle im Geoportal öffnen';
         root.appendChild(source);
-        const caveat=document.createElement('small');caveat.textContent='Aktueller Baumbestand; Angaben ohne Gewähr.';
+        const caveat=document.createElement('small');
+        caveat.textContent='Sachdaten und Datenstand werden vom jeweiligen Kartenanbieter geliefert.';
         root.appendChild(caveat);
         return root;
       }
       map.on('click',async event=>{
-        if(!(active?.type==='geoportal'&&active.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand')||!window.AtlasGeoportal?.getTreeInfo)return;
+        const selected=active;
+        if(selected?.type!=='geoportal'||!window.AtlasGeoportal)return;
+        const tree=selected.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand';
         const serial=++treeQuerySerial;
-        const waiting=document.createElement('div');waiting.textContent='Baumdaten werden abgerufen …';
-        const popup=L.popup({maxWidth:325,minWidth:215,closeButton:true,autoPan:false})
+        const waiting=document.createElement('div');
+        waiting.textContent=tree?'Baumdaten werden abgerufen …':'Sachdaten werden abgefragt …';
+        const popup=L.popup({maxWidth:335,minWidth:215,closeButton:true,autoPan:false})
           .setLatLng(event.latlng).setContent(waiting).openOn(historicalMap);
         try{
-          const result=await window.AtlasGeoportal.getTreeInfo(map,L,event.latlng);
-          if(serial!==treeQuerySerial||!historicalMap.hasLayer(popup))return;
-          popup.setContent(treePopup(result));popup.update();
+          const result=tree?
+            await window.AtlasGeoportal.getTreeInfo(map,L,event.latlng):
+            await window.AtlasGeoportal.getFeatureInfo(map,L,event.latlng,selected.sourceUrl,selected.layerName);
+          if(serial!==treeQuerySerial||active?.id!==selected.id||!historicalMap.hasLayer(popup))return;
+          popup.setContent(featurePopup(result,selected));popup.update();
         }catch(e){
-          if(serial!==treeQuerySerial||!historicalMap.hasLayer(popup))return;
-          popup.setContent(treePopup({error:e.message}));popup.update();
+          if(serial!==treeQuerySerial||active?.id!==selected.id||!historicalMap.hasLayer(popup))return;
+          popup.setContent(featurePopup({error:e.message},selected));popup.update();
         }
       });
-      const closeMobile=() => $('sidebar').classList.remove('open');
+            const closeMobile=() => $('sidebar').classList.remove('open');
       $('openSidebar').addEventListener('click',()=>$('sidebar').classList.add('open'));
       $('closeSidebar').addEventListener('click',closeMobile);
       const closeOpacity=()=>{$('opacityPopover').hidden=true;$('opacityToggle').setAttribute('aria-expanded','false');};
