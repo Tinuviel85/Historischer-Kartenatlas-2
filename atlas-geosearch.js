@@ -142,139 +142,213 @@ function yearOf(name){
  const m=String(name).match(/(?:18[6-9]\d|19\d{2}|20[0-2]\d)/);
  return m?Number(m[0]):null;
 }
-function mount({parent,maps,add,capabilities}){
- if(!parent||!add||!capabilities)return;
+// Fachkarten navigation: theme > subtheme > service > layer. Every level
+// REPLACES the previous button palette, with a persistent Back action.
+const TOPICS=[
+ {label:"Planen & Bauen",icon:"▥",sub:[
+  ["Bebauungspläne","Bebauungsplan",[]],["Flächennutzungsplanung","Flächennutzungsplan",[]],
+  ["Städtebau & Quartiere","Stadtentwicklung",[]],["Planungsrecht","Planungsrecht",[]],
+  ["Grundstücke & Flurstücke","Flurstück",[]],["Wohnungsbau","Wohnungsbau",[]]]},
+ {label:"Natur & Umwelt",icon:"♧",sub:[
+  ["Baumbestand","Baumbestand",["trees"]],["Grünflächen & Parks","Grünanlagen",[]],
+  ["Biotope & Artenschutz","Biotop",[]],["Schutzgebiete","Schutzgebiete",[]],
+  ["Klima & Stadtklima","Stadtklima",[]],["Boden & Altlasten","Boden",[]],
+  ["Gewässer","Gewässer",[]],["Umweltatlas","Umweltatlas",[]]]},
+ {label:"Verkehr & Mobilität",icon:"⇄",sub:[
+  ["Straßen & Verkehr","Straßenverkehr",[]],["Bahn & ÖPNV","Schienenverkehr",[]],
+  ["Radverkehr","Radverkehr",[]],["Parken & Lieferverkehr","Parken",[]],
+  ["Verkehrszählung","Verkehrszählung",[]]]},
+ {label:"Lärm & Immissionen",icon:"◉",sub:[
+  ["Straßenverkehrslärm","Straßenverkehrslärm",[]],["Schienenverkehrslärm","Schienenverkehrslärm",[]],
+  ["Lärmaktionsplanung","Lärm",[]],["Luftqualität","Luftqualität",[]],
+  ["Immissionsschutz","Immissionsschutz",[]]]},
+ {label:"Geschichte & Denkmale",icon:"◷",sub:[
+  ["Historische Pläne","Historische Karten",["straube"]],
+  ["Denkmalkarte","Denkmalkarte",[]],["Historische Luftbilder","Luftbilder",["aerial1928","aerial1938","aerial1953"]],
+  ["Historische Stadtentwicklung","Stadtgeschichte",[]]]},
+ {label:"Luftbilder & Fernerkundung",icon:"▧",sub:[
+  ["Historische Luftbilder","Luftbilder",["aerial1928","aerial1938","aerial1953"]],
+  ["Aktuelle Orthophotos","Orthophoto",["aerial2025"]],["Fernerkundung","Fernerkundung",[]]]},
+ {label:"Wohnen & Gesellschaft",icon:"▦",sub:[
+  ["Einwohner & Sozialstruktur","Einwohner",[]],["Sozialatlas","Sozialatlas",[]],
+  ["Kitas & Schulen","Schulen",[]],["Gesundheit","Gesundheitsversorgung",[]]]},
+ {label:"Weitere Fachkarten",icon:"⋯",sub:[
+  ["Verwaltung & Bezirke","Bezirksgrenzen",[]],["Energie","Energie",[]],
+  ["Wirtschaft & Gewerbe","Gewerbe",[]],["Geologie","Geologie",[]],
+  ["Alle verfügbaren Fachkarten","Berlin",[]]]}
+];
+const BASEMAP=/(?:^|[\s_\-])(basiskarte|grundkarte|hintergrund(?:karte)?|background|basemap|openstreetmap|webatlas|topplus|basiskarten)(?:$|[\s_\-])/i;
+const INDEXONLY=/bildmitten?|bildzentren|gebietsabdeckung|blattschnitt|bildindex|bildpunkte|footprints?|aufnahmeorte|flugstreifen|blattgrenze/i;
+function isBackground(x){return BASEMAP.test((x.title||"")+" "+(x.name||"")+" "+(x.url||""));}
+function isIndexed(x){return INDEXONLY.test((x.title||"")+" "+(x.name||""));}
+function mount({parent,maps,preview,capabilities,services=[]}){
+ if(!parent||!preview||!capabilities)return;
  const styles=node("style");
- styles.textContent=".gdi-browser{border:1px solid #c6d8c7;border-radius:12px;background:#fff;padding:12px;margin:12px 0}.gdi-browser h3{margin:0 0 8px;font-size:14px;color:#214939}.gdi-browser p,.gdi-browser .gdi-small{font-size:11px;line-height:1.5;color:#5d7869}.gdi-browser form{display:flex;gap:7px}.gdi-browser input{min-width:0;flex:1;border:1px solid #c6d8cb;border-radius:9px;padding:11px;font-size:13px}.gdi-browser button{border:1px solid #bfd5c5;border-radius:9px;padding:9px;font-size:12px;color:#214d3a;font-weight:700;background:#f1f8f1}.gdi-browser button.primary{background:#245544;color:#fff}.gdi-browser button:disabled{opacity:.5}.gdi-browser .themes{display:flex;gap:6px;overflow-x:auto;padding:9px 0;scrollbar-width:thin}.gdi-browser .themes button{flex:none;white-space:nowrap}.gdi-browser .catalog-result{padding:10px 0;border-top:1px solid #e2ece4}.gdi-browser .catalog-result strong{display:block;font-size:12px;overflow-wrap:anywhere}.gdi-browser .catalog-result small{display:block;color:#6d8074;font-size:11px;margin:3px 0 7px}.gdi-browser .catalog-result button{margin:3px 5px 3px 0}.gdi-browser .catalog-layers{padding:5px 0 5px 10px;border-left:2px solid #b4d3bc}.gdi-browser .catalog-layer{padding:8px 0;border-bottom:1px dashed #dce6de;display:flex;gap:6px;justify-content:space-between;align-items:center}.gdi-browser .catalog-layer span{font-size:11px;min-width:0;overflow-wrap:anywhere}.gdi-browser .catalog-layer button{white-space:nowrap;flex:none}.gdi-browser .catalog-status{font-size:11px;line-height:1.4;margin:8px 0;color:#486a58}.gdi-browser .browse-footer{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:9px 0}.gdi-browser a{color:#245e47}.gdi-browser .geo-metadata{margin:10px 0;border:1px solid #dae6de;border-radius:9px;padding:9px;background:#f7faf7}.gdi-browser .geo-metadata>summary{font-size:12px;font-weight:750;color:#28563f;cursor:pointer;line-height:1.4}.gdi-browser .geo-metadata .metadata-scroll{max-height:45dvh;overflow-y:auto;margin-top:9px}.gdi-browser .metadata-row{display:grid;grid-template-columns:minmax(0,38%) minmax(0,62%);gap:9px;padding:7px 1px;border-bottom:1px solid #e6eee7;font-size:11px;line-height:1.4}.gdi-browser .metadata-row b{color:#4e7061;font-weight:650;overflow-wrap:anywhere}.gdi-browser .metadata-row span{overflow-wrap:anywhere;white-space:pre-wrap}.gdi-browser .metadata-row a{overflow-wrap:anywhere}.gdi-browser .metadata-actions{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}.gdi-browser .metadata-error{color:#a44935;font-size:11px}.gdi-browser .catalog-layer{flex-wrap:wrap}.gdi-browser .catalog-layer>.geo-metadata{width:100%;margin:2px 0}.gdi-browser .metadata-copy{display:block;width:100%;font-weight:400;text-align:left;color:#28493c;background:transparent;border:0;margin:0;padding:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4;cursor:copy}.gdi-browser .metadata-copy:hover{text-decoration:underline}";
+ styles.textContent=".gdi-browser{border:0;padding:0;margin:0}.gdi-browser .gdi-browser-description{font-size:12px;line-height:1.5;color:#63786b;margin:0 0 11px}.gdi-browser .gdi-browser-search{display:flex;gap:8px}.gdi-browser .gdi-browser-search input{min-width:0;flex:1;padding:11px;border:1px solid #cadbce;border-radius:11px;font-size:13px;background:#fff}.gdi-browser button{font:700 12px system-ui;border-radius:11px;border:1px solid #c9dfce;padding:10px;color:#28533e;background:#f6f9f6;cursor:pointer}.gdi-browser button:disabled{opacity:.52}.gdi-browser .gdi-action{background:#245744;color:white;border-color:#245744}.gdi-browser .gdi-breadcrumb{font-size:11px;color:#718579;margin:13px 0 7px;line-height:1.45}.gdi-browser .gdi-navrow{display:flex;justify-content:space-between;align-items:center;gap:9px;margin:7px 0 12px}.gdi-browser .gdi-step-title{font-size:15px;font-weight:800;color:#224938;overflow-wrap:anywhere}.gdi-browser .gdi-back{background:#edf5ef;color:#245440;white-space:nowrap}.gdi-browser .gdi-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:9px;margin:10px 0}.gdi-browser .gdi-palette>button{display:flex;align-items:center;justify-content:space-between;text-align:left;gap:8px;min-height:57px;padding:12px 13px;line-height:1.35;background:#fff;border:1px solid #d6e5da;box-shadow:0 2px 7px #18402b0c;color:#254c3a}.gdi-browser .gdi-palette>button:hover,.gdi-browser .gdi-palette>button:focus-visible{background:#eaf4ed;border-color:#94b89f}.gdi-browser .gdi-arrow{font-size:20px;color:#6c977b;flex:none}.gdi-browser .gdi-palette>button .gdi-mini{display:block;color:#718478;font-size:10px;font-weight:400;margin-top:4px;overflow-wrap:anywhere}.gdi-browser .gdi-status{font-size:11px;color:#557360;line-height:1.5;margin:10px 0}.gdi-browser .gdi-layer-card{border:1px solid #d9e7dc;border-radius:12px;background:white;padding:11px;margin:8px 0}.gdi-browser .gdi-layer-card strong{display:block;font-size:12px;color:#264b39;overflow-wrap:anywhere}.gdi-browser .gdi-layer-card small{display:block;color:#6c7d72;font-size:11px;margin:5px 0;line-height:1.4}.gdi-browser .gdi-layer-card button{margin-top:7px;background:#245744;color:white;border-color:#245744}.gdi-browser .gdi-layer-filter{box-sizing:border-box;width:100%;border-radius:10px;border:1px solid #cdded0;padding:10px;margin:9px 0;font-size:13px}.gdi-browser .gdi-extra{border-top:1px solid #e1ebe4;margin-top:12px;padding-top:11px}.gdi-browser .gdi-extra a{color:#246345;font-size:12px}.gdi-browser .gdi-more{width:100%;margin:9px 0}.gdi-browser .gdi-hint{font-size:11px;color:#65786a;line-height:1.5}.gdi-browser .gdi-tag{font-size:10px;color:#577562}.gdi-browser .gdi-icon{font-size:19px;width:21px;flex:none}@media(max-width:470px){.gdi-browser .gdi-palette{grid-template-columns:1fr 1fr}.gdi-browser .gdi-palette>button{padding:11px 9px;min-height:64px;font-size:11px}.gdi-browser .gdi-icon{display:none}}";
  document.head.appendChild(styles);
- const box=node("section",null,"gdi-browser");
- const title=node("h3","Gesamten Berliner Geodatenkatalog durchsuchen");
- const note=node("p","Amtliche Kartenwerke, Luftbilder, Umwelt- und Fachkarten direkt suchen und einzelne Kartenebenen in deine Sammlung übernehmen.");
- const form=node("form"),input=node("input"),go=node("button","Suchen","primary");
- input.type="search";input.placeholder="z. B. Luftbilder, Eisenbahn, Bäume";input.maxLength=90;
- input.setAttribute("aria-label","Geodatenkatalog durchsuchen");
- go.type="submit";form.append(input,go);
- const themes=node("div",null,"themes");
+ const root=node("section",null,"gdi-browser");
+ const note=node("p","Nur Fachkarten. Wähle ein Thema, dann eine Kartenebene. Erst ansehen, danach auf der Karte speichern.","gdi-browser-description");
+ const form=node("form",null,"gdi-browser-search");
+ const input=node("input");input.type="search";input.placeholder="Fachkarte suchen …";input.maxLength=90;input.setAttribute("aria-label","Berliner Fachkarte suchen");
+ const searchButton=node("button","Suchen","gdi-action");searchButton.type="submit";
+ form.append(input,searchButton);
+ const crumbs=node("div",null,"gdi-breadcrumb");
+ const header=node("div",null,"gdi-navrow");
+ const back=node("button","‹ Zurück","gdi-back");back.type="button";
+ const step=node("strong",null,"gdi-step-title");header.append(back,step);
+ const palette=node("div",null,"gdi-palette");
  const results=node("div");results.setAttribute("aria-live","polite");
- const status=node("p","Suchbegriff eingeben oder ein Thema auswählen.","catalog-status");
- const footer=node("div",null,"browse-footer");
- const more=node("button","Weitere Treffer laden");more.type="button";more.hidden=true;
- const official=node("a","Alle Daten im Geoportal recherchieren");
+ const status=node("p",null,"gdi-status");
+ const extras=node("div",null,"gdi-extra");
+ const official=node("a","Amtliche Geodatensuche öffnen");
  official.href="https://gdi.berlin.de/geonetwork/srv/ger/catalog.search";
  official.target="_blank";official.rel="noopener noreferrer";
- footer.append(more,official);
- const urlRow=node("div",null,"catalog-result");
- const urlHelp=node("small","Alternativ einen WMS-Link aus der Berliner Geodatensuche einfügen:");
- const urlForm=node("form");
- const urlInput=node("input");urlInput.type="url";urlInput.placeholder="https://gdi.berlin.de/services/wms/…";urlInput.setAttribute("aria-label","WMS-Adresse");
- const urlGo=node("button","Ebenen laden");urlGo.type="submit";
- urlForm.append(urlInput,urlGo);urlRow.append(urlHelp,urlForm);
- box.append(title,note,form,themes,status,results,footer,urlRow);
- const marker=parent.querySelector("#gdiItems");
- if(marker)marker.before(box);else parent.append(box);
- let currentQuery="",next=1,loading=false;
- const originalLabel=go.textContent;
- function sourceURL(url){
-  return /^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url);
+ extras.appendChild(official);
+ const urlForm=node("form",null,"gdi-browser-search");
+ const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Berliner WMS-Adresse einfügen";urlInput.setAttribute("aria-label","Offizielle Berliner WMS-URL");
+ const urlButton=node("button","Öffnen");urlButton.type="submit";urlForm.append(urlInput,urlButton);
+ extras.appendChild(node("p","Du hast bereits einen WMS-Link? Öffne hier seine Kartenebenen.","gdi-hint"),urlForm);
+ root.append(note,form,crumbs,header,palette,status,results,extras);parent.appendChild(root);
+ let stack=[{level:"root",title:"Fachkarten"}], requestId=0,searchPosition=1,selectedQuery="",serviceSeen=new Set(),resultsCount=0;
+ const present=()=>stack[stack.length-1];
+ const addButton=(label,action,description,icon)=>{
+  const b=node("button");b.type="button";
+  if(icon)b.appendChild(node("span",icon,"gdi-icon"));
+  const span=node("span");span.textContent=label;
+  if(description)span.appendChild(node("small",description,"gdi-mini"));
+  b.append(span,node("span","›","gdi-arrow"));b.addEventListener("click",action);palette.appendChild(b);
+  return b;
+ };
+ const backgroundService=x=>isBackground(x);
+ function push(view){requestId++;stack.push(view);render();}
+ function pop(){if(stack.length>1){requestId++;stack.pop();render();}}
+ function setStatus(message){status.textContent=message||"";}
+ function clear(){palette.replaceChildren();results.replaceChildren();setStatus("");}
+ function render(){
+  const view=present();clear();
+  crumbs.textContent=stack.map(s=>s.title).join(" › ");
+  step.textContent=view.title;
+  back.hidden=stack.length===1;
+  if(view.level==="root"){
+   for(const topic of TOPICS){
+    addButton(topic.label,()=>push({level:"topics",title:topic.label,topic}),null,topic.icon);
+   }
+  }else if(view.level==="topics"){
+   for(const [label,query,preset] of view.topic.sub){
+    addButton(label,()=>push({level:"services",title:label,query,preset}),"Fachkarten durchsuchen");
+   }
+  }else if(view.level==="services"){
+   searchPosition=1;selectedQuery=view.query;serviceSeen=new Set();resultsCount=0;
+   setStatus("Kartendienste werden ermittelt …");
+   for(const id of view.preset||[]){
+    const svc=services.find(s=>s.id===id&&!s.indexOnly);
+    if(svc)showService({title:svc.title,url:"https://gdi.berlin.de/services/wms/"+svc.slug,description:svc.note});
+   }
+   loadMoreServices(view);
+  }else if(view.level==="layers"){
+   setStatus("Kartenebenen werden geladen …");loadLayers(view);
+  }
  }
- function setStatus(t){status.textContent=t;}
- function hideMore(){more.hidden=true;}
- function renderService(entry){
-  if(!sourceURL(entry.url))return;
-  const row=node("div",null,"catalog-result");
-  const t=node("strong",entry.title),desc=node("small",(entry.description||"").slice(0,180)||entry.url);
-  const open=node("button","Kartenebenen anzeigen");open.type="button";
-  const layerBox=node("div",null,"catalog-layers");layerBox.hidden=true;
-  const external=node("a","Quelle");external.href="https://gdi.berlin.de/view/"+entry.url.slice(BASE.length);
-  external.target="_blank";external.rel="noopener noreferrer";
-  // The user inspects object attributes by tapping the loaded map.
-  // Keep discovery focused on choosing layers, not massive metadata panels.
-  row.append(t,desc,open,external,layerBox);results.appendChild(row);
-  open.addEventListener("click",async()=>{
-   if(!layerBox.hidden){layerBox.hidden=true;open.textContent="Kartenebenen anzeigen";return;}
-   open.disabled=true;open.textContent="Lade Ebenen …";
-   try{
-    const caps=await capabilities(entry.url);
-    const layers=(caps.leaves||[]).filter(x=>x.name);
-    layerBox.replaceChildren();
-    if(!layers.length)throw Error("Keine benannten Ebenen verfügbar.");
-    const filter=node("input");
-    filter.type="search";filter.placeholder="Kartenebenen filtern …";filter.setAttribute("aria-label","Kartenebenen filtern");
-    layerBox.appendChild(filter);
-    const container=node("div");
-    layerBox.appendChild(container);
-    function showLayers(){
-     container.replaceChildren();
-     const q=filter.value.trim().toLocaleLowerCase("de");
-     const selection=layers.filter(l=>!q||(l.title+" "+l.name).toLocaleLowerCase("de").includes(q)).slice(0,100);
-     for(const layer of selection){
-      const row=node("div",null,"catalog-layer");
-      const label=node("span",layer.title||layer.name);
-      const addButton=node("button","+ Übernehmen");addButton.type="button";
-      const already=maps.some(m=>m&&!m.hidden&&m.sourceUrl===entry.url&&m.type==="geoportal"&&m.layerName===layer.name);
-      if(already){addButton.disabled=true;addButton.textContent="Gespeichert";}
-      addButton.addEventListener("click",()=>{
-       try{
-        const name=layers.length===1?entry.title:entry.title+" · "+(layer.title||layer.name);
-        add({
-         name:name.slice(0,200),year:yearOf(name),region:"Berlin",
-         sourceUrl:entry.url,type:"geoportal",layerName:layer.name,
-         detailUrl:"https://gdi.berlin.de/view/"+entry.url.slice(BASE.length),
-         provider:"Geoportal Berlin / Land Berlin"
-        },null);
-        setStatus("Die Kartenebene „"+(layer.title||layer.name)+"“ wurde deiner Kartenbibliothek hinzugefügt.");
-        addButton.disabled=true;addButton.textContent="Gespeichert";
-        parent.closest("dialog")?.close();
-        document.getElementById("sidebar")?.classList.remove("open");
-       }catch(e){setStatus("Karte konnte nicht hinzugefügt werden: "+e.message);}
-      });
-      row.append(label,addButton);container.append(row);
-     }
-     if(layers.length>100&&!q)container.prepend(node("p","100 Ebenen sichtbar – über das Suchfeld weitere finden.","gdi-small"));
-     if(!selection.length)container.append(node("p","Keine passenden Kartenebenen.","gdi-small"));
-    }
-    filter.addEventListener("input",showLayers);showLayers();
-    layerBox.hidden=false;open.textContent="Kartenebenen schließen";
-   }catch(e){setStatus("Ebenen konnten nicht geladen werden: "+e.message);open.textContent="Erneut versuchen";}
-   finally{open.disabled=false;}
-  });
+ function showService(item){
+  if(backgroundService(item)||serviceSeen.has(item.url))return;
+  serviceSeen.add(item.url);resultsCount++;
+  addButton(item.title||"Berliner Fachkarte",()=>{
+   push({level:"layers",title:item.title||"Kartenebenen",service:item});
+  },(item.description||"").slice(0,90)||item.url);
  }
- async function search(query,append=false){
-  if(loading)return;
-  loading=true;go.disabled=true;more.disabled=true;
-  if(!append){results.replaceChildren();next=1;currentQuery=normalQuery(query);}
-  official.href="https://gdi.berlin.de/geonetwork/srv/ger/catalog.search#/search?any="+encodeURIComponent(currentQuery);
-  setStatus("Suche im amtlichen Berliner Geodatenkatalog …");
+ async function loadMoreServices(view){
+  if(present()!==view)return;
+  const id=++requestId,start=searchPosition;
+  setStatus("Suche im Berliner Fachkartenkatalog …");
   try{
-   const page=await searchCSW(currentQuery,next);
-   for(const entry of page.results)renderService(entry);
-   next+=30;
-   more.hidden=!(page.matched>=next);
-   setStatus("Katalog: "+page.matched+" Datensätze gefunden. "+
-    page.results.length+" WMS-Dienste auf dieser Suchseite; weitere Seiten können geladen werden.");
-   if(!page.results.length)results.append(node("p","Diese Trefferseite enthält keine direkt einbindbaren WMS-Karten. Weitere Treffer laden oder den Suchbegriff ändern.","gdi-small"));
-  }catch(e){
-   setStatus("Die automatische Geodatensuche konnte nicht geladen werden ("+
-     (e.name==="AbortError"?"Zeitüberschreitung":e.message)+
-     "). Öffne die amtliche Suche über den Link unten oder füge dort gefundene WMS-Adressen über das Feld ein.");
-   hideMore();
-  }finally{go.disabled=false;more.disabled=false;loading=false;}
+   const page=await searchCSW(view.query,start);
+   if(id!==requestId||present()!==view)return;
+   searchPosition+=30;
+   for(const item of page.results)showService(item);
+   setStatus(resultsCount+" relevante WMS-Dienste gefunden. "+
+      (page.matched>=searchPosition?"Weitere Katalogseiten verfügbar.":"Weitere Treffer über die Suche möglich."));
+   results.replaceChildren();
+   if(page.matched>=searchPosition){
+    const more=node("button","Weitere Kartendienste laden","gdi-more");
+    more.type="button";more.addEventListener("click",()=>loadMoreServices(view));
+    results.appendChild(more);
+   }
+   if(!resultsCount)results.appendChild(node("p","Noch keine passenden Fachkarten gefunden. Probiere einen anderen Suchbegriff oder die amtliche Suche.","gdi-hint"));
+  }catch(error){
+   if(id!==requestId||present()!==view)return;
+   setStatus("Automatische Katalogsuche derzeit nicht verfügbar ("+error.message+"). Bekannte amtliche Karten oben kannst du trotzdem auswählen. Alternativ die amtliche Suche öffnen.");
+  }
  }
- form.addEventListener("submit",e=>{e.preventDefault();search(input.value);});
- for(const theme of THEMES){
-  const b=node("button",theme);b.type="button";
-  b.addEventListener("click",()=>{input.value=theme==="Alle"?"":theme;search(input.value);});
-  themes.appendChild(b);
+ async function loadLayers(view){
+  const id=++requestId;
+  try{
+   const info=await capabilities(view.service.url);
+   if(id!==requestId||present()!==view)return;
+   const available=(info.leaves||[]).filter(l=>l.name&&!isBackground(l)&&!isIndexed(l));
+   const svc=services.find(s=>"https://gdi.berlin.de/services/wms/"+s.slug===view.service.url);
+   // For known aerial-photo services, display only actual photographs,
+   // never photo-centre and sheet-footprint index layers.
+   const aerial=svc?.id?.startsWith("aerial")||/luftbild_/.test(view.service.url);
+   const layers=aerial?available.filter(l=>/raster|mosaik|luftbild|bilddaten|orthophoto/i.test(l.name+" "+l.title)):available;
+   if(!layers.length){setStatus("Dieser Dienst bietet keine einbindbare Fachkartenebene an. Eventuell werden nur Übersichts-/Indexdaten angeboten.");return;}
+   results.replaceChildren();
+   const filter=node("input",null,"gdi-layer-filter");filter.type="search";filter.placeholder="Kartenebenen filtern …";
+   filter.setAttribute("aria-label","Fachkartenebenen durchsuchen");results.appendChild(filter);
+   const body=node("div");results.appendChild(body);
+   const show=()=>{
+    body.replaceChildren();const term=filter.value.trim().toLocaleLowerCase("de");
+    const match=layers.filter(l=>!term||(l.title+" "+l.name+" "+(l.abstract||"")).toLocaleLowerCase("de").includes(term));
+    let visible=80;
+    const addCards=()=>{
+     const fragment=document.createDocumentFragment();
+     for(const layer of match.slice(body.querySelectorAll(".gdi-layer-card").length,visible)){
+      const row=node("div",null,"gdi-layer-card");
+      const heading=node("strong",layer.title||layer.name);
+      const subtitle=node("small",(layer.abstract||"").slice(0,180));
+      const identifier=node("small","Ebene: "+layer.name,"gdi-tag");
+      const button=node("button","Auf Karte legen");button.type="button";
+      button.addEventListener("click",()=>{
+       const name=layers.length===1?view.service.title:view.service.title+" · "+(layer.title||layer.name);
+       const item={name:name.slice(0,210),year:yearOf(name),region:"Berlin",
+         sourceUrl:view.service.url,type:"geoportal",layerName:layer.name,
+         detailUrl:"https://gdi.berlin.de/view/"+view.service.url.split("/").pop(),
+         provider:"Geoportal Berlin / Land Berlin"};
+       try{preview(item);}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
+      });
+      row.append(heading,subtitle,identifier,button);
+      fragment.append(row);
+     }
+     body.querySelector(".gdi-more")?.remove();
+     body.append(fragment);
+     if(match.length>visible){
+      const more=node("button","Weitere "+Math.min(80,match.length-visible)+" Ebenen anzeigen","gdi-more");
+      more.type="button";more.addEventListener("click",()=>{visible+=80;addCards();});
+      body.append(more);
+     }
+    };
+    addCards();
+    setStatus(layers.length+" einbindbare Fachkartenebenen. „Auf Karte legen“ öffnet eine ungespeicherte Vorschau.");
+   };
+   filter.addEventListener("input",show);show();
+  }catch(error){
+   if(id!==requestId||present()!==view)return;
+   setStatus("Ebenen nicht erreichbar: "+error.message+". Prüfe den Originaldienst oder verwende einen anderen Kartendienst.");
+  }
  }
- more.addEventListener("click",()=>search(currentQuery,true));
- urlForm.addEventListener("submit",e=>{
-  e.preventDefault();
-  const candidate=urlInput.value.trim().split("?")[0];
-  if(!sourceURL(candidate)){setStatus("Bitte eine offizielle Berliner WMS-Adresse verwenden, zum Beispiel https://gdi.berlin.de/services/wms/baumbestand.");return;}
-  renderService({title:"Berliner WMS · "+candidate.slice(BASE.length),url:candidate,description:"Manuell ausgewählter Kartendienst"});
-  setStatus("Kartenwerk eingefügt. Wähle darunter „Kartenebenen anzeigen“.");
-  urlInput.value="";
+ back.addEventListener("click",pop);
+ form.addEventListener("submit",e=>{
+  e.preventDefault();const query=normalQuery(input.value);
+  if(!query){setStatus("Bitte einen Suchbegriff eingeben.");return;}
+  push({level:"services",title:"Suche: "+query,query,preset:[]});
  });
+ urlForm.addEventListener("submit",e=>{
+  e.preventDefault();const url=urlInput.value.trim().split("?")[0].replace(/^http:/,"https:");
+  if(!/^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url)){
+   setStatus("Hier können nur offizielle Berliner WMS-Dienste geladen werden.");return;
+  }
+  push({level:"layers",title:"Kartenebenen",service:{url,title:url.split("/").pop(),description:"Amtlicher Berliner WMS"}});
+ });
+ render();
 }
 window.AtlasGeoSearch={mount,parseCSW,searchCSW};
 })();
