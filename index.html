@@ -1002,10 +1002,8 @@
         const item={...preview.item};
         $('atlasPreviewSave').disabled=true;
         try{
-          const added=await window.atlasManager.saveDiscoveredMap(item);
-          // upsert selects the saved card and removes temporary preview.
-          if(preview)discardPreview(false);
-          if(added?.id!==undefined)selectMap(added.id,{restoreView:true});
+          await window.atlasManager.saveDiscoveredMap(item);
+          // Saving already selects the new card and removes the preview.
           setNotice('Karte in deiner Sammlung gespeichert.',3800);
         }catch(error){
           $('atlasPreviewSave').disabled=false;
