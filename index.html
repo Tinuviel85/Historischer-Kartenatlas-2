@@ -245,6 +245,14 @@
     .opacity-popover .field-head{margin-bottom:12px}
     .opacity-popover input{display:block;width:100%;height:26px;touch-action:pan-x}
     .tools-menu .tool-icon[aria-pressed="true"]{background:rgba(35,88,66,.27)!important;box-shadow:inset 0 0 0 2px rgba(35,88,66,.25)!important}
+    .tree-popup{font-size:12px;color:#294435;min-width:195px;max-width:300px}
+    .tree-popup>strong{display:block;font-size:15px;margin-bottom:10px}
+    .tree-popup p{line-height:1.5;margin:7px 0}
+    .tree-properties{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px 10px;max-height:270px;overflow:auto;margin:6px 0 11px;align-items:start}
+    .tree-properties dt{color:#68756d;font-size:11px;overflow-wrap:anywhere}
+    .tree-properties dd{margin:0;font-weight:650;overflow-wrap:anywhere}
+    .tree-popup>a{display:block;color:#20624b;margin-top:9px}
+    .tree-popup>small{display:block;font-size:10px;color:#6c7d71;margin-top:7px}
     .map-info{flex:none;width:34px;height:34px;display:grid;place-items:center;border:1px solid #e1e8e1;border-radius:11px;background:#f9fbf9;color:#426755;font-size:20px;line-height:1}
     .map-info:hover,.map-info:focus-visible{background:#ecf5ec;color:#1b4b3b}
     @media(max-width:680px){
@@ -430,7 +438,7 @@
   <script src="atlas-config.js"></script>
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
   <script src="atlas-histomap.js?v=20261106-allsheets"></script>
-  <script src="atlas-geoportal.js?v=20261106-official2"></script>
+  <script src="atlas-geoportal.js?v=20261106-features"></script>
   <script src="atlas-manager.js?v=20261106-gdi-trees"></script>
   <script>
     'use strict';
@@ -594,6 +602,70 @@
         }
         $('geoportalOverlayCredit').hidden=geoportalOverlayLayers.size===0;
       };
+      // Tree information is queried only when the user taps the map while
+      // the current Baumbestand layer is active. All values are rendered as
+      // plain text to avoid inserting remote HTML into the atlas.
+      let treeQuerySerial=0;
+      const treeLabels={
+        baumid:"Baum-ID",standortnr:"Baumnummer",kennzeich:"Objektnummer",
+        namenr:"Objektname",art_dtsch:"Baumart (Deutsch)",art_bot:"Baumart (botanisch)",
+        gattung_deutsch:"Gattung (Deutsch)",gattung:"Gattung (botanisch)",
+        art_gruppe:"Baumartgruppe",strname:"Straße",hausnr:"Hausnummer",
+        zusatz:"Hausnummerzusatz",pflanzjahr:"Pflanzjahr",standalter:"Standalter (Jahre)",
+        kronedurch:"Kronendurchmesser (m)",stammumfg:"Stammumfang (cm)",
+        baumhoehe:"Baumhöhe (m)",bezirk:"Bezirk",eigentuemer:"Eigentümer",
+        kategorie:"Kategorie",art:"Baumart"
+      };
+      function treePopup(data){
+        const root=document.createElement('div');root.className='tree-popup';
+        const header=document.createElement('strong');header.textContent='Baumbestand Berlin';
+        root.appendChild(header);
+        const props=data?.properties;
+        if(props&&Object.keys(props).length){
+          const table=document.createElement('dl');table.className='tree-properties';
+          let count=0;
+          for(const [key,v] of Object.entries(props)){
+            if(v===null||v===undefined||v===''||typeof v==='object'||/^(geom|geometry|the_geom|shape|bbox|id)$/i.test(key))continue;
+            const dt=document.createElement('dt');
+            dt.textContent=treeLabels[key.toLowerCase()]||key.replace(/[_-]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+            const dd=document.createElement('dd');dd.textContent=String(v);
+            table.append(dt,dd);
+            if(++count>=35)break;
+          }
+          if(count)root.appendChild(table);
+          else {const p=document.createElement('p');p.textContent='Für diesen Baum sind keine weiteren Sachdaten hinterlegt.';root.appendChild(p);}
+          if(data.count>1){
+            const note=document.createElement('small');note.textContent='Mehrere Bäume in der Nähe; der erste Treffer wird angezeigt.';root.appendChild(note);
+          }
+        }else{
+          const p=document.createElement('p');
+          p.textContent='Für diesen Punkt wurden keine einzelnen Baumdaten gefunden. Versuche, direkt auf ein Baumsymbol zu tippen.'+
+            (data?.error?' Der Datendienst konnte auch eingeschränkt erreichbar sein.':'');
+          root.appendChild(p);
+        }
+        const source=document.createElement('a');
+        source.href='https://gdi.berlin.de/view/baumbestand';
+        source.target='_blank';source.rel='noopener noreferrer';source.textContent='Im Geoportal prüfen';
+        root.appendChild(source);
+        const caveat=document.createElement('small');caveat.textContent='Aktueller Baumbestand; Angaben ohne Gewähr.';
+        root.appendChild(caveat);
+        return root;
+      }
+      map.on('click',async event=>{
+        if(!geoportalOverlayLayers.has('trees')||!window.AtlasGeoportal?.getTreeInfo)return;
+        const serial=++treeQuerySerial;
+        const waiting=document.createElement('div');waiting.textContent='Baumdaten werden abgerufen …';
+        const popup=L.popup({maxWidth:325,minWidth:215,closeButton:true})
+          .setLatLng(event.latlng).setContent(waiting).openOn(map);
+        try{
+          const result=await window.AtlasGeoportal.getTreeInfo(map,L,event.latlng);
+          if(serial!==treeQuerySerial||!map.hasLayer(popup))return;
+          popup.setContent(treePopup(result));popup.update();
+        }catch(e){
+          if(serial!==treeQuerySerial||!map.hasLayer(popup))return;
+          popup.setContent(treePopup({error:e.message}));popup.update();
+        }
+      });
       const closeMobile=() => $('sidebar').classList.remove('open');
       $('openSidebar').addEventListener('click',()=>$('sidebar').classList.add('open'));
       $('closeSidebar').addEventListener('click',closeMobile);
