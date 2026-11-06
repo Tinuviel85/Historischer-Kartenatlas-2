@@ -194,6 +194,7 @@
     var editing = null;
     function beginNewMap() {
       editing = null;
+      updateManualSubmit();
       el("managerMapForm").reset();
       el("mgrDelete").classList.add("manager-hidden");
       el("mgrType").value = "xyz";
@@ -205,6 +206,7 @@
     function editMap(id) {
       var m = maps[id]; if (!m || m.hidden) return;
       editing = id;
+      updateManualSubmit();
       open("map");
       populateRegions();
       el("mgrName").value = m.name || "";
@@ -244,9 +246,9 @@
     async function saveDiscoveredMap(item){
       var clean=normalizePreview(item);
       if(!defs[clean.region])await ensureRegion(clean.region);
-      return upsert(clean,null);
+      return upsert(clean,null,true);
     }
-    function upsert(item, id) {
+    function upsert(item, id, keepView=false) {
       item = sanitizeMap(item);
       if(item.type==="wmts"){
         // WMTS REST endpoints typically use the OGC variable names below.
@@ -283,12 +285,13 @@
         Object.assign(maps[id], item);
         if (id < defaultCount) overrides[id] = Object.assign({}, item);
       }
-      persist(); redraw(); api.selectMap(item.id); return item;
+      persist(); redraw(); api.selectMap(item.id,{restoreView:keepView}); return item;
     }
     // Manual entry is also a real map preview; only editing an existing
     // library item saves directly.
     const manualSubmit=el("managerMapForm").querySelector('button[type="submit"]');
-    if(manualSubmit)manualSubmit.textContent="Auf Karte legen";
+    function updateManualSubmit(){if(manualSubmit)manualSubmit.textContent=editing===null?"Auf Karte legen":"Änderungen speichern";}
+    updateManualSubmit();
     el("managerMapForm").addEventListener("submit", function (ev) {
       ev.preventDefault();
       try {
