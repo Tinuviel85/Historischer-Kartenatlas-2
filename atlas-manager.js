@@ -219,7 +219,7 @@
       if (item.type === "geoportal") {
         if(!window.AtlasGeoportal?.allowedUrl(item.sourceUrl))
           throw new Error("Dieser Geoportal-Dienst ist nicht im geprüften Berliner Katalog.");
-        item.layerName="auto";
+        if(!item.layerName)item.layerName="auto";
       }
       if (mapExists(item, id)) throw new Error("Diese Karte ist bereits in deiner Bibliothek.");
       if (id === null || id === undefined) {
