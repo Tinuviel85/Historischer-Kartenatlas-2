@@ -138,58 +138,110 @@ function wmsImage(names,bounds,L,size){
  return query;
 }
 function createLayer(L,url,onError,options={}){
- if(!allowedUrl(url))throw Error("Unbekannter Geoportal-Dienst.");
+ if(!allowedUrl(url))throw Error("Unbekannter Berliner Kartendienst.");
  const service=serviceForUrl(url);
- if(service?.indexOnly)throw Error("Dieser Dienst enthält lediglich Bildmitten oder Blattschnitte.");
- // Leaflet's native WMS tiles have the SAME lifecycle as MapWarper tiles:
- // setOpacity() works, removeLayer() cancels tiles and selection never
- // leaves previous viewport images behind. The old image-overlay implementation
- // did not support setOpacity() and could leave provisional images on the map.
- const StandardWMS=L.Layer.extend({
-  initialize:function(){
-   this._opacity=1;this._generation=0;this._inner=null;this._map=null;
-  },
-  onAdd:function(map){
-   this._map=map;
-   const sequence=++this._generation;
-   capabilities(url).then(info=>{
-     if(!this._map||this._map!==map||sequence!==this._generation)return;
-     const layers=selectedWmsLayers(url,info,options.layerName).map(x=>x.name);
-     if(!layers.length)throw Error("Keine darstellbaren Kartenebenen vorhanden.");
-     const tile=L.tileLayer.wms(url,{
-       layers:layers.join(","),format:"image/png",transparent:true,version:"1.1.1",
-       minZoom:2,maxZoom:19,keepBuffer:2,updateWhenIdle:true,
-       updateWhenZooming:false,opacity:this._opacity,noWrap:true
-     });
-     tile.on("tileerror",()=>{
-       if(sequence===this._generation&&!this._tileErrorShown){
-         this._tileErrorShown=true;
-         onError?.("Der Berliner Kartendienst konnte einzelne Kartenbilder nicht liefern.");
+ if(service?.indexOnly)throw Error("Der Dienst stellt nur einen Bildnachweis bereit.");
+ // Aerial photo mosaics need far fewer, larger WMS GetMap requests than
+ // repeatedly requesting small 256-pixel tiles. This viewport WMS layer
+ // supports native Leaflet lifecycle + opacity, including instant removal.
+ // Other Fachkarten use ordinary WMS tiles as before.
+ const photo=/luftbild|dop_|orthophoto|straubeplan/i.test(url);
+ if(photo){
+  const ViewWMS=L.Layer.extend({
+   initialize:function(){this._map=null;this._opacity=1;this._version=0;this._current=null;this._pending=null;this._timer=null;this._warned=false;},
+   onAdd:function(map){
+    this._map=map;this._version++;
+    map.on("moveend zoomend resize",this._schedule,this);
+    this._schedule(true);
+   },
+   onRemove:function(map){
+    this._version++;clearTimeout(this._timer);
+    map.off("moveend zoomend resize",this._schedule,this);
+    for(const ref of [this._pending,this._current]){
+     if(ref&&map.hasLayer(ref))map.removeLayer(ref);
+    }
+    this._pending=null;this._current=null;this._map=null;
+   },
+   _schedule:function(immediate){
+    clearTimeout(this._timer);
+    this._timer=setTimeout(()=>this._refresh(),immediate===true?0:145);
+   },
+   _refresh:async function(){
+    const map=this._map;if(!map)return;
+    const version=++this._version;
+    const bounds=map.getBounds(),size=map.getSize();
+    if(!size.x||!size.y)return;
+    let layers;
+    try{
+     const info=await capabilities(url);
+     if(version!==this._version||this._map!==map)return;
+     layers=selectedWmsLayers(url,info,options.layerName).map(l=>l.name);
+    }catch(e){if(!this._warned){this._warned=true;onError?.("Luftbild-Dienst: "+e.message);}return;}
+    const scale=Math.min(1,1800/Math.max(size.x,size.y));
+    const px=L.point(Math.max(1,Math.round(size.x*scale)),Math.max(1,Math.round(size.y*scale)));
+    const request=url+"?"+wmsImage(layers,bounds,L,px).toString();
+    if(this._pending&&map.hasLayer(this._pending))map.removeLayer(this._pending);
+    const pending=L.imageOverlay(request,bounds,{opacity:this._opacity,interactive:false});
+    this._pending=pending;
+    let settled=false;
+    const timeout=setTimeout(()=>finalize(false),18000);
+    const finalize=(ok)=>{
+      if(settled)return;settled=true;clearTimeout(timeout);
+      pending.off("load",loaded);pending.off("error",failed);
+      if(version!==this._version||this._map!==map){
+       if(map.hasLayer(pending))map.removeLayer(pending);
+       return;
+      }
+      if(!ok){
+       if(map.hasLayer(pending))map.removeLayer(pending);
+       if(this._pending===pending)this._pending=null;
+       if(!this._warned){
+        this._warned=true;
+        onError?.("Das Luftbildmosaik wurde nicht ausgeliefert. Vergrößere die Karte oder prüfe den Originaldienst.");
        }
-     });
-     if(sequence!==this._generation||!this._map)return;
-     this._inner=tile;tile.addTo(map);
-   }).catch(err=>{
-     if(sequence===this._generation&&this._map)
-       onError?.("Geoportal Berlin: "+err.message);
-   });
+       return;
+      }
+      const old=this._current;this._current=pending;this._pending=null;
+      if(old&&old!==pending&&map.hasLayer(old))map.removeLayer(old);
+    };
+    const loaded=()=>finalize(true),failed=()=>finalize(false);
+    pending.once("load",loaded);
+    pending.once("error",failed);
+    pending.addTo(map);
+   },
+   setOpacity:function(v){
+    this._opacity=Math.max(0,Math.min(1,Number(v)));
+    this._current?.setOpacity(this._opacity);
+    this._pending?.setOpacity(this._opacity);
+    return this;
+   },
+   getOpacity:function(){return this._opacity;}
+  });
+  return new ViewWMS();
+ }
+ const NativeWMS=L.Layer.extend({
+  initialize:function(){this._map=null;this._inner=null;this._version=0;this._opacity=1;this._warned=false;},
+  onAdd:function(map){
+   this._map=map;const version=++this._version;
+   capabilities(url).then(info=>{
+    if(version!==this._version||this._map!==map)return;
+    const names=selectedWmsLayers(url,info,options.layerName).map(l=>l.name);
+    const inner=L.tileLayer.wms(url,{layers:names.join(","),format:"image/png",
+     transparent:true,version:"1.1.1",minZoom:2,maxZoom:19,
+     updateWhenIdle:true,updateWhenZooming:false,keepBuffer:2,noWrap:true,
+     opacity:this._opacity});
+    inner.on("tileerror",()=>{
+     if(!this._warned&&version===this._version){this._warned=true;onError?.("Einige Kartenbilder konnten vom Dienst nicht abgerufen werden.");}
+    });
+    if(version!==this._version||this._map!==map)return;
+    this._inner=inner;inner.addTo(map);
+   }).catch(e=>{if(version===this._version&&this._map)onError?.("Geoportal Berlin: "+e.message);});
   },
-  onRemove:function(map){
-   ++this._generation;
-   if(this._inner){
-     if(map.hasLayer(this._inner))map.removeLayer(this._inner);
-     this._inner=null;
-   }
-   this._map=null;
-  },
-  setOpacity:function(value){
-   this._opacity=Math.max(0,Math.min(1,Number(value)));
-   if(this._inner)this._inner.setOpacity(this._opacity);
-   return this;
-  },
+  onRemove:function(map){this._version++;if(this._inner&&map.hasLayer(this._inner))map.removeLayer(this._inner);this._inner=null;this._map=null;},
+  setOpacity:function(v){this._opacity=Math.max(0,Math.min(1,Number(v)));this._inner?.setOpacity(this._opacity);return this;},
   getOpacity:function(){return this._opacity;}
  });
- return new StandardWMS();
+ return new NativeWMS();
 }
 // Inspect individual geospatial objects (B-Plans, land parcels, noise zones,
 // protected areas...). Returns all advertised object attributes and links.
