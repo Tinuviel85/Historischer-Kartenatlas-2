@@ -217,7 +217,8 @@ function createFullYearLayer(L,year,onError,selection){
      jobs.push(resilientBatch(names.slice(i,i+batchSize),i));
    }
    Promise.all(jobs).then(outcomes=>{
-     if(!outcomes.some(Boolean))notify("HistoMap konnte hier kein Kartenbild ausliefern. Prüfe, ob historische Blätter für das Gebiet vorhanden sind.");
+     if(!outcomes.some(Boolean))notify("HistoMap konnte kein Kartenbild ausliefern. Prüfe, ob historische Blätter für das Gebiet vorhanden sind.");
+     else if(outcomes.some(ok=>!ok))notify("Einige historische Kartenblätter konnten nicht geladen werden; andere Blätter werden weiterhin angezeigt.");
      done(null,tile);
    }).catch(()=>{
      notify("Beim Laden historischer Kartenblätter ist ein Fehler aufgetreten.");
