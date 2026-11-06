@@ -5,8 +5,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#173e37">
-  <meta name="description" content="Historische Karten erkunden, nach Ort und Epoche suchen und mit der heutigen Karte vergleichen.">
-  <title>Historischer Kartenatlas</title>
+  <meta name="description" content="Karten von früher bis heute entdecken: historische Stadtpläne, Luftbilder, aktuelle Geodaten und Baumbestände.">
+  <title>Kartenatlas – Von früher bis heute</title>
   <!-- Leaflet 1.9.4. CSS mit automatischem CDN-Fallback.
        Auch bei direktem Öffnen der HTML-Datei bleibt eine Internetverbindung für Kartenkacheln nötig. -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
@@ -73,9 +73,6 @@
     #historicalMap{position:absolute;inset:0;z-index:2;pointer-events:none;background:transparent!important;clip-path:inset(0 0 0 0)}
     #historicalMap.leaflet-container{background:transparent!important}
     #historicalMap *{pointer-events:none!important}
-    #geoportalOverlayMap{position:absolute;inset:0;z-index:3;pointer-events:none;background:transparent!important}
-    #geoportalOverlayMap.leaflet-container{background:transparent!important}
-    #geoportalOverlayMap *{pointer-events:none!important}
     .leaflet-container{font:inherit}
     /* Alle Bedienelemente befinden sich über den beiden Karten. */
     .map-attribution{position:absolute;left:0;right:0;bottom:0;z-index:720;background:#fffffff0;padding:5px 9px;font-size:10px;line-height:1.3;color:#405249;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;min-height:24px}
@@ -323,13 +320,13 @@
       <div class="sidebar-top">
         <div class="brand">
           <button class="brand-mark" id="aboutBrand" type="button" title="Über die Anwendung" aria-label="Über die Anwendung">H</button>
-          <div class="brand-text"><strong>Historischer Kartenatlas</strong><small>Vergangenheit entdecken</small></div>
+          <div class="brand-text"><strong>Kartenatlas</strong><small>Von früher bis heute</small></div>
           <button id="closeSidebar" class="mobile-close" title="Kartenauswahl schließen" aria-label="Kartenauswahl schließen">×</button>
         </div>
-        <p class="home-summary">Historische Karten entdecken, mit heutigen Karten vergleichen und eigene Kartensammlungen verwalten.</p>
+        <p class="home-summary">Karten von früher bis heute entdecken: historische Pläne, Luftbilder, heutige Geodaten und eigene Sammlungen.</p>
         <div class="search-box">
           <span class="mag" aria-hidden="true">⌕</span>
-          <label for="mapSearch" class="sr-only">Historische Karten durchsuchen</label>
+          <label for="mapSearch" class="sr-only">Alle Karten durchsuchen</label>
           <input class="text-input" id="mapSearch" type="search" placeholder="Karte, Ort oder Jahr suchen …" autocomplete="off">
         </div>
         <div id="regions" class="filter-scroller" aria-label="Nach Region filtern"></div>
@@ -337,7 +334,7 @@
       </div>
       <div class="side-scroll">
         <div class="section-title"><h2>Kartensammlung</h2><span id="mapCount"></span></div>
-        <div id="mapList" class="map-list" role="listbox" aria-label="Historische Karten"></div>
+        <div id="mapList" class="map-list" role="listbox" aria-label="Alle Karten von früher bis heute"></div>
       </div>
       <div class="sidebar-bottom">
         <button id="aboutButton" class="about-link" type="button">Hilfe und Kartenquellen</button>
@@ -347,10 +344,9 @@
         </nav>
       </div>
     </aside>
-    <main class="stage" aria-label="Interaktive historische Karte">
+    <main class="stage" aria-label="Interaktiver Kartenatlas von früher bis heute">
       <div id="map"></div>
       <div id="historicalMap" aria-hidden="true"></div>
-      <div id="geoportalOverlayMap" aria-hidden="true"></div>
       <div id="gpsIndicator" class="gps-indicator" hidden aria-hidden="true">
         <div id="gpsBeam" class="gps-beam"><svg viewBox="0 0 180 180" width="180" height="180" aria-hidden="true"><defs><linearGradient id="beamFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2388db" stop-opacity=".07"/><stop offset="1" stop-color="#2388db" stop-opacity=".35"/></linearGradient></defs><path d="M90 90 L44 9 Q90 -12 136 9 Z" fill="url(#beamFade)" stroke="#2388db" stroke-opacity=".25"/></svg></div>
         <div class="gps-dot"></div>
@@ -359,7 +355,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
         Neu zentrieren
       </button>
-      <div class="map-attribution"><a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> <a id="sourceAttributionLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Kartenquelle</a><span id="geoportalOverlayCredit" hidden> | <a href="https://gdi.berlin.de/view/baumbestand" target="_blank" rel="noopener noreferrer">© Geoportal Berlin · Baumbestand</a></span></div>
+      <div class="map-attribution"><a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> | © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> <a id="sourceAttributionLink" href="#" target="_blank" rel="noopener noreferrer" hidden>Kartenquelle</a></div>
       <button id="openSidebar" class="mobile-open" type="button" title="Karten auswählen" aria-label="Karten auswählen">☰</button>
       <div class="map-tools">
         <button id="toolsToggle" class="tools-toggle" type="button" aria-label="Kartenwerkzeuge öffnen" aria-expanded="false" aria-controls="toolsMenu" title="Kartenwerkzeuge"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="11" cy="17" r="2" fill="currentColor" stroke="none"/></svg></button>
@@ -367,7 +363,6 @@
           <button id="locateMapButton" class="tool-icon" type="button" aria-label="Mein Standort" title="Mein Standort"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
           <button id="addressButton" class="tool-icon" type="button" aria-label="Adresse suchen" title="Adresse suchen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button>
           <button id="shareButton" class="tool-icon" type="button" aria-label="Karte teilen" title="Teilen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m0 0-4.5 4.5M12 3l4.5 4.5"/><path d="M4 13v5a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-5"/></svg></button>
-          <button id="treesToggle" class="tool-icon" type="button" aria-label="Aktuellen Baumbestand ein- oder ausblenden" aria-pressed="false" title="Baumbestand anzeigen"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 5 12h4l-5 6h16l-5-6h4L12 2Z"/><path d="M12 18v4"/></svg></button>
           <div class="opacity-tool">
             <button id="opacityToggle" class="tool-icon" type="button" aria-label="Deckkraft einstellen" aria-expanded="false" aria-controls="opacityPopover" title="Deckkraft"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-2.8 3.9-7 8.1-7 12a7 7 0 0 0 14 0c0-3.9-4.2-8.1-7-12Z"/><path d="M9 16a3 3 0 0 0 3 3"/></svg></button>
             <div id="opacityPopover" class="opacity-popover" role="group" aria-label="Deckkraft der historischen Karte" hidden>
@@ -547,19 +542,6 @@
         doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false,
         zoomAnimation:false,minZoom:2,maxZoom:19,worldCopyJump:true
       }).setView(map.getCenter(),map.getZoom());
-      const geoportalOverlayMap=L.map("geoportalOverlayMap",{
-        zoomControl:false,attributionControl:false,dragging:false,
-        scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,
-        keyboard:false,touchZoom:false,zoomAnimation:false,
-        minZoom:2,maxZoom:19,worldCopyJump:true
-      }).setView(map.getCenter(),map.getZoom());
-      const syncGeoportalOverlay=()=>{
-        const center=map.getCenter(),z=map.getZoom(),old=geoportalOverlayMap.getCenter();
-        if(geoportalOverlayMap.getZoom()!==z||Math.abs(old.lat-center.lat)>1e-8||
-           Math.abs(old.lng-center.lng)>1e-8)
-          geoportalOverlayMap.setView(center,z,{animate:false});
-      };
-      map.on("move zoomend",syncGeoportalOverlay);
       const syncHistorical=()=>{
         const center=map.getCenter(),zoom=map.getZoom();
         const other=historicalMap.getCenter();
@@ -588,19 +570,6 @@
         $('toastText').textContent=message;
         $('toast').classList.add('show');
         if(duration>0)toastTimer=setTimeout(dismissNotice,Math.min(duration,4200));
-      };
-      const geoportalOverlayLayers=new Map();
-      const setGeoportalOverlay=(entry,enabled)=>{
-        if(!entry||entry.id!=="trees"||!window.AtlasGeoportal)return;
-        const previous=geoportalOverlayLayers.get(entry.id);
-        if(previous){geoportalOverlayMap.removeLayer(previous);geoportalOverlayLayers.delete(entry.id);}
-        if(enabled){
-          syncGeoportalOverlay();
-          const newLayer=window.AtlasGeoportal.createLayer(L,entry.sourceUrl,(message)=>setNotice(message,6500),{overlay:true});
-          newLayer.addTo(geoportalOverlayMap);
-          geoportalOverlayLayers.set(entry.id,newLayer);
-        }
-        $('geoportalOverlayCredit').hidden=geoportalOverlayLayers.size===0;
       };
       // Tree information is queried only when the user taps the map while
       // the current Baumbestand layer is active. All values are rendered as
@@ -652,7 +621,7 @@
         return root;
       }
       map.on('click',async event=>{
-        if(!geoportalOverlayLayers.has('trees')||!window.AtlasGeoportal?.getTreeInfo)return;
+        if(!(active?.type==='geoportal'&&active.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand')||!window.AtlasGeoportal?.getTreeInfo)return;
         const serial=++treeQuerySerial;
         const waiting=document.createElement('div');waiting.textContent='Baumdaten werden abgerufen …';
         const popup=L.popup({maxWidth:325,minWidth:215,closeButton:true})
@@ -671,7 +640,6 @@
       $('closeSidebar').addEventListener('click',closeMobile);
       const closeOpacity=()=>{$('opacityPopover').hidden=true;$('opacityToggle').setAttribute('aria-expanded','false');};
       const closeTools=()=>{$('toolsMenu').hidden=true;$('toolsToggle').setAttribute('aria-expanded','false');closeOpacity();};
-      $('treesToggle').addEventListener('click',()=>window.atlasManager?.toggleTrees());
       $('toolsToggle').addEventListener('click',()=>{
         const open=$('toolsMenu').hidden;
         if(!open)closeTools();
@@ -803,12 +771,13 @@
         // MapWarper stellt die Kacheln bereit, ohne dass dadurch Rechte am Karteninhalt behauptet werden.
         return `Historische Karte: <a href="${m.detailUrl}" target="_blank" rel="noopener noreferrer">${provider}</a>`;
       }
+      const isTodayMap=m=>!!m&&m.type==='geoportal'&&m.sourceUrl==='https://gdi.berlin.de/services/wms/baumbestand';
       function showDetail(){
         if(!active)return;
         const m=active;
         $('detailLink').href=m.detailUrl;
         $('detailTitle').innerHTML=`<b>Karte:</b> ${escapeHtml(m.displayName)}`;
-        $('detailYear').textContent=m.year?`Datierung laut Titel: ${m.year}`:'Keine eindeutige Jahreszahl im Titel';
+        $('detailYear').textContent=isTodayMap(m)?'Aktueller Datenstand (wird vom Geoportal aktualisiert)':m.year?`Datierung laut Titel: ${m.year}`:'Keine eindeutige Jahreszahl im Titel';
         $('detailRegion').textContent=`Region: ${m.region}`;
         $('detailProvider').textContent=`Kacheldienst: ${m.provider}`;
         const cfg=regionDefinitions[m.region], zoom=Math.min(cfg.zoom,12);
@@ -823,10 +792,10 @@
       function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
       function updateTimeline(){
         if(!active){
-          const berlin=maps.filter(m=>!m.hidden&&mapGroup(m)==='Berlin'&&m.year!==null)
-            .sort((a,b)=>a.year-b.year||a.id-b.id);
-          $('timelineYear').textContent='Berlin · Ohne historische Karte';
-          $('timelineText').textContent='Karte auswählen oder mit › durch die Jahre';
+          const berlin=maps.filter(m=>!m.hidden&&mapGroup(m)==='Berlin'&&(m.year!==null||isTodayMap(m)))
+            .sort((a,b)=>(a.year??9999)-(b.year??9999)||a.id-b.id);
+          $('timelineYear').textContent='Berlin · Straßenkarte';
+          $('timelineText').textContent='Karte aus deiner Sammlung wählen';
           $('timelineInfo').disabled=true;
           $('prevYear').disabled=true;
           $('nextYear').disabled=berlin.length===0;
@@ -835,10 +804,10 @@
           return;
         }
         const group=mapGroup(active);
-        const timeline=maps.filter(m=>!m.hidden&&mapGroup(m)===group&&m.year!==null)
-          .sort((a,b)=>a.year-b.year||a.id-b.id);
+        const timeline=maps.filter(m=>!m.hidden&&mapGroup(m)===group&&(m.year!==null||isTodayMap(m)))
+          .sort((a,b)=>(a.year??9999)-(b.year??9999)||a.id-b.id);
         const pos=timeline.findIndex(m=>m.id===active.id);
-        $('timelineYear').textContent=(active.year?active.year+' · ':'')+active.displayName;
+        $('timelineYear').textContent=(isTodayMap(active)?'Heute · ':active.year?active.year+' · ':'')+active.displayName;
         $('timelineText').textContent=active.region+' · '+active.provider.replace(' (alte Adresse)','');
         $('timelineInfo').disabled=false;
         $('prevYear').disabled=pos<=0;
@@ -1083,7 +1052,7 @@
         else updateTimeline();
         setMode(active&&p.get('modus')==='compare'?'compare':'overlay');
       }
-      window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,setNotice,setGeoportalOverlay,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
+      window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
       $('compareMode').disabled=true;
       renderRegions();
       restoreFromHash();
@@ -1093,8 +1062,7 @@
       const refreshSize=()=>{
         map.invalidateSize({animate:false,pan:false});
         historicalMap.invalidateSize({animate:false,pan:false});
-        geoportalOverlayMap.invalidateSize({animate:false,pan:false});
-        syncHistorical();syncGeoportalOverlay();
+        syncHistorical();
         renderGpsIndicator();
       };
       $('closeSidebar').addEventListener('click',()=>setTimeout(refreshSize,280));
