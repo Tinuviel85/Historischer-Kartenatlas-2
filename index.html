@@ -438,7 +438,7 @@
   <script src="atlas-config.js"></script>
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
   <script src="atlas-histomap.js?v=20261106-allsheets"></script>
-  <script src="atlas-geoportal.js?v=20261106-features"></script>
+  <script src="atlas-geoportal.js?v=20261106-raster-only"></script>
   <script src="atlas-manager.js?v=20261106-gdi-trees"></script>
   <script>
     'use strict';
@@ -854,6 +854,14 @@
         active=m;
         detailOpen=false;$('detailCard').classList.remove('open');
         focusMap(m,previous,restoreView);
+        // Historical aerial raster services are scale-dependent. A city-wide
+        // overview often contains only image locations, not photographs.
+        // Start at the viewing scale recommended for the selected series.
+        if(m.type==='geoportal'&&!restoreView){
+          const source=window.AtlasGeoportal?.services.find(entry=>m.sourceUrl==='https://gdi.berlin.de/services/wms/'+entry.slug);
+          if(source?.focusZoom && map.getZoom()<source.focusZoom)
+            map.setZoom(source.focusZoom,{animate:false});
+        }
         syncHistorical();
         layer=(m.type==='geoportal'
           ? window.AtlasGeoportal.createLayer(L,m.sourceUrl,(message)=>setNotice(message,6500))
