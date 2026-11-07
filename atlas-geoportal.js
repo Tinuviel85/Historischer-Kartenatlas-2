@@ -60,7 +60,7 @@ function parseCapabilities(raw){
     const set=new Set();
     for(let anc=layer;anc&&anc.nodeType===1;anc=anc.parentElement){
      for(const el of directChildren(anc,"CRS").concat(directChildren(anc,"SRS")))
-      for(const code of (el.textContent||"").trim().split(/\\s+/))if(code)set.add(code);
+      for(const code of (el.textContent||"").trim().split(/\s+/))if(code)set.add(code);
      if(anc.localName==="Capability")break;
     }
     return [...set];
