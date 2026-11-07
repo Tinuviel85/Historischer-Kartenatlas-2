@@ -283,7 +283,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  const root=node("section",null,"gdi-browser");
 
  const form=node("form",null,"gdi-browser-search");
- const input=node("input");input.type="search";input.placeholder="Fachkarte suchen …";input.maxLength=90;input.setAttribute("aria-label","Berliner Fachkarte suchen");
+ const input=node("input");input.type="search";input.placeholder="Fachkarte suchen …";input.maxLength=90;input.setAttribute("aria-label","Fachkarte im gewählten Bundesland suchen");
  const searchButton=node("button","Suchen","gdi-action");searchButton.type="submit";
  form.append(input,searchButton);
  const crumbs=node("div",null,"gdi-breadcrumb");
@@ -295,15 +295,15 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  const status=node("p",null,"gdi-status");
  const extras=node("div",null,"gdi-extra");
  const official=node("a","Amtliche Geodatensuche öffnen");
- official.href="https://gdi.berlin.de/geonetwork/srv/ger/catalog.search";
+ official.href="https://www.geoportal.de/apps/land";
  official.target="_blank";official.rel="noopener noreferrer";
  extras.appendChild(official);
  const urlForm=node("form",null,"gdi-browser-search");
- const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Berliner WMS-Adresse einfügen";urlInput.setAttribute("aria-label","Offizielle Berliner WMS-URL");
+ const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Amtliche WMS-Adresse einfügen";urlInput.setAttribute("aria-label","WMS-Dienstadresse");
  const urlButton=node("button","Öffnen");urlButton.type="submit";urlForm.append(urlInput,urlButton);
  extras.appendChild(node("p","Du hast bereits einen WMS-Link? Öffne hier seine Kartenebenen.","gdi-hint"),urlForm);
  root.append(form,crumbs,header,palette,status,results,extras);parent.appendChild(root);
- let stack=[{level:"root",title:"Fachkarten"}], requestId=0,searchPosition=1,selectedQuery="",serviceSeen=new Set(),resultsCount=0;
+ let stack=[{level:"root",title:"Geoportal"}], requestId=0,searchPosition=1,selectedQuery="",serviceSeen=new Set(),resultsCount=0;
  const present=()=>stack[stack.length-1];
  const addButton=(label,action,description,icon)=>{
   const b=node("button");b.type="button";
@@ -323,58 +323,99 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   crumbs.textContent=stack.map(s=>s.title).join(" › ");
   step.textContent=view.title;
   back.hidden=stack.length===1;
+  official.href=view.state?.portal||"https://www.geoportal.de/apps/land";
+  official.textContent=view.state?"Amtliches Geoportal "+view.state.name+" öffnen":"Geoportale der Bundesländer öffnen";
+  urlForm.hidden=!(view.state?.code==="BE");
   if(view.level==="root"){
+   for(const state of STATES){
+    addButton(state.name,()=>push({level:"state",title:state.name,state}));
+   }
+  }else if(view.level==="state"){
    for(const topic of TOPICS){
-    addButton(topic.label,()=>push({level:"services",title:topic.label,category:topic.code,query:"",preset:[]}));
-   }}else if(view.level==="services"){
+    addButton(topic.label,()=>push({level:"services",title:topic.label,
+     state:view.state,category:topic.code,query:"",preset:[]}));
+   }
+  }else if(view.level==="services"){
    searchPosition=1;selectedQuery=view.query;serviceSeen=new Set();resultsCount=0;
-   setStatus("Kartendienste werden ermittelt …");
-   for(const id of view.preset||[]){
-    const svc=services.find(s=>s.id===id&&!s.indexOnly);
-    if(svc)showService({title:svc.title,url:"https://gdi.berlin.de/services/wms/"+svc.slug,description:svc.note});
+   setStatus("Amtliche Kartendienste werden ermittelt …");
+   if(view.state?.code==="BE"){
+    for(const id of view.preset||[]){
+     const svc=services.find(s=>s.id===id&&!s.indexOnly);
+     if(svc)showService({title:svc.title,
+      url:"https://gdi.berlin.de/services/wms/"+svc.slug,description:svc.note});
+    }
    }
    loadMoreServices(view);
   }else if(view.level==="layers"){
-   setStatus("Kartenebenen werden geladen …");loadLayers(view);
+   setStatus("Kartenebenen werden geladen …");
+   loadLayers(view);
   }
  }
  function showService(item){
   if(backgroundService(item)||serviceSeen.has(item.url))return;
   serviceSeen.add(item.url);resultsCount++;
-  addButton(item.title||"Berliner Fachkarte",()=>{
-   push({level:"layers",title:item.title||"Kartenebenen",service:item});
+  addButton(item.title||"Amtlicher Kartendienst",()=>{
+   push({level:"layers",title:item.title||"Kartenebenen",service:item,state:present().state});
   });
  }
  async function loadMoreServices(view){
   if(present()!==view)return;
   const id=++requestId,start=searchPosition;
-  setStatus("Suche im Berliner Fachkartenkatalog …");
+  const federal=view.state?.code!=="BE";
+  setStatus(federal?"Suche im bundesweiten Geodatenkatalog.de …":"Suche im Berliner Fachkartenkatalog …");
   try{
-   const page=await searchCSW(view.query,start,{category:view.category});
+   let page;
+   try{
+    page=await searchCSW(view.query,start,{category:view.category,state:view.state,mode:view.mode||"bounds"});
+   }catch(e){
+    if(!federal||view.mode==="name")throw e;
+    // Nicht jeder CSW-Server unterstützt den BBOX-Ausdruck in CQL.
+    // Fallback ist die landesspezifische Volltextabfrage.
+    view.mode="name";
+    page=await searchCSW(view.query,start,{category:view.category,state:view.state,mode:"name"});
+   }
    if(id!==requestId||present()!==view)return;
    searchPosition+=30;
    for(const item of page.results)showService(item);
-   setStatus(resultsCount+" relevante WMS-Dienste gefunden. "+
-      (page.matched>=searchPosition?"Weitere Katalogseiten verfügbar.":"Weitere Treffer über die Suche möglich."));
+   setStatus(resultsCount+" amtliche WMS-Dienste gefunden. "+
+     (page.matched>=searchPosition?"Weitere Katalogseiten verfügbar.":""));
    results.replaceChildren();
    if(page.matched>=searchPosition){
     const more=node("button","Weitere Kartendienste laden","gdi-more");
     more.type="button";more.addEventListener("click",()=>loadMoreServices(view));
     results.appendChild(more);
    }
-   if(!resultsCount)results.appendChild(node("p","Noch keine passenden Fachkarten gefunden. Probiere einen anderen Suchbegriff oder die amtliche Suche.","gdi-hint"));
+   if(!resultsCount){
+    const empty=node("p","In dieser Katalogseite keine direkt verwendbaren WMS-Dienste gefunden. Weitere Treffer laden oder das amtliche Landesportal öffnen.","gdi-hint");
+    results.appendChild(empty);
+   }
   }catch(error){
    if(id!==requestId||present()!==view)return;
-   setStatus("Automatische Katalogsuche derzeit nicht verfügbar ("+error.message+"). Bekannte amtliche Karten oben kannst du trotzdem auswählen. Alternativ die amtliche Suche öffnen.");
+   setStatus("Amtlicher Katalog hier nicht erreichbar ("+error.message+"). Über den Link unten kannst du das zuständige Landesportal direkt öffnen.");
   }
+ }
+ async function getServiceCapabilities(url, state){
+  if(state?.code==="BE")return capabilities(url);
+  // Die bundesweit gefundenen WMS stammen aus dem amtlichen GDI-DE-Katalog.
+  // CORS ist vom jeweiligen Dienstanbieter abhängig.
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
+  try{
+   const separator=url.includes("?")?"&":"?";
+   const response=await fetch(url+separator+"SERVICE=WMS&REQUEST=GetCapabilities&VERSION=1.1.1",
+    {mode:"cors",signal:controller.signal});
+   if(!response.ok)throw Error("WMS HTTP "+response.status);
+   const parse=window.AtlasGeoportal?.parseCapabilities;
+   if(typeof parse!=="function")throw Error("WMS-Parser ist nicht verfügbar.");
+   return parse(await response.text());
+  }finally{clearTimeout(timeout);}
  }
  async function loadLayers(view){
   const id=++requestId;
   try{
-   const info=await capabilities(view.service.url);
+   const info=await getServiceCapabilities(view.service.url,view.state);
    if(id!==requestId||present()!==view)return;
    const available=(info.leaves||[]).filter(l=>l.name&&!isBackground(l)&&!isIndexed(l));
-   const svc=services.find(s=>"https://gdi.berlin.de/services/wms/"+s.slug===view.service.url);
+   const svc=view.state?.code==="BE"?services.find(s=>"https://gdi.berlin.de/services/wms/"+s.slug===view.service.url):null;
    // For known aerial-photo services, display only actual photographs,
    // never photo-centre and sheet-footprint index layers.
    const aerial=svc?.id?.startsWith("aerial")||/luftbild_/.test(view.service.url);
@@ -396,14 +437,25 @@ function mount({parent,maps,preview,capabilities,services=[]}){
 
        const layerMetadata=metadataDetails("Metadaten",layerFields(layer,view.service),view.service.metadataXml||"","geoportal-metadaten.xml");
       const button=node("button","Auf Karte legen");button.type="button";
+      const berlin=view.state?.code==="BE";
+      // Andere Laender liefern teilweise nur UTM- oder GK-WMS. Diese
+      // duerfen auf Leaflets EPSG:3857-Karte nicht falsch gekachelt werden.
+      const crsCodes=(layer.crs||[]).join(" ");
+      const supported=berlin||/(?:^|\\s)EPSG:3857(?:\\s|$)/i.test(crsCodes);
+      if(!supported){
+       button.disabled=true;
+       button.textContent="Projektion nicht kompatibel";
+       button.title="Dieser WMS bietet kein EPSG:3857. Bitte im Originalportal ansehen.";
+      }
       button.addEventListener("click",()=>{
+       if(!supported)return;
        const name=layers.length===1?view.service.title:view.service.title+" · "+(layer.title||layer.name);
-       const item={name:name.slice(0,210),year:yearOf(name),region:"Berlin",
-         sourceUrl:view.service.url,type:"geoportal",layerName:layer.name,
+       const item={name:name.slice(0,210),year:yearOf(name),region:view.state?.name||"Berlin",
+         sourceUrl:view.service.url,type:berlin?"geoportal":"wms",layerName:layer.name,
          bounds:Array.isArray(layer.box)&&layer.box.length===4
            ?[[layer.box[1],layer.box[0]],[layer.box[3],layer.box[2]]]:null,
-         detailUrl:"https://gdi.berlin.de/view/"+view.service.url.split("/").pop(),
-         provider:"Geoportal Berlin / Land Berlin"};
+         detailUrl:view.state?.portal||view.service.url,
+         provider:berlin?"Geoportal Berlin / Land Berlin":"Geodatenkatalog.de · "+(view.state?.name||"Deutschland")};
        try{preview(item);}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
       });
       row.append(heading,button,layerMetadata);
@@ -430,16 +482,18 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  form.addEventListener("submit",e=>{
   e.preventDefault();const query=normalQuery(input.value);
   if(!query){setStatus("Bitte einen Suchbegriff eingeben.");return;}
-  push({level:"services",title:"Suche: "+query,query,preset:[]});
+  const state=present().state;
+  if(!state){setStatus("Bitte zuerst ein Bundesland auswählen.");return;}
+  push({level:"services",title:"Suche: "+query,state,query,preset:[]});
  });
  urlForm.addEventListener("submit",e=>{
   e.preventDefault();const url=urlInput.value.trim().split("?")[0].replace(/^http:/,"https:");
   if(!/^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url)){
    setStatus("Hier können nur offizielle Berliner WMS-Dienste geladen werden.");return;
   }
-  push({level:"layers",title:"Kartenebenen",service:{url,title:url.split("/").pop(),description:"Amtlicher Berliner WMS"}});
+  push({level:"layers",title:"Kartenebenen",state:stateFor("BE"),service:{url,title:url.split("/").pop(),description:"Amtlicher Berliner WMS"}});
  });
  render();
 }
-window.AtlasGeoSearch={mount,parseCSW,searchCSW};
+window.AtlasGeoSearch={mount,parseCSW,parseNationalCSW,searchCSW,states:STATES,topics:TOPICS};
 })();
