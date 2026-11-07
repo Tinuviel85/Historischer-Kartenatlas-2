@@ -418,8 +418,8 @@
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
   <script src="atlas-histomap.js?v=20261106-allsheets"></script>
   <script src="atlas-geoportal.js?v=20261107-straube-seamless5"></script>
-  <script src="atlas-geosearch.js?v=20261107-official-iso-categories3"></script>
-  <script src="atlas-manager.js?v=20261107-no-starter-maps1"></script>
+  <script src="atlas-geosearch.js?v=20261107-spatial-bounds2"></script>
+  <script src="atlas-manager.js?v=20261107-location-bounds2"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -887,6 +887,7 @@
       }
       function focusMap(m, previous, restored=false){
         if(restored)return;
+        if(focusPreviewBounds(m.bounds))return;
         const cfg=regionDefinitions[m.region];
         const current=map.getCenter();
         const moved=distanceKm([current.lat,current.lng],cfg.center);
@@ -957,6 +958,7 @@
               : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true});
       }
       function discardPreview(restore=true){
+        previewLocationSerial++;
         if(!preview)return;
         if(preview.layer&&historicalMap.hasLayer(preview.layer))historicalMap.removeLayer(preview.layer);
         preview=null;
@@ -974,6 +976,96 @@
         }else $('sourceAttributionLink').hidden=true;
         applyPane();
       }
+      // Die räumliche Abdeckung der tatsächlichen Kartenquelle ist maßgeblich.
+      // Eine Vorschau darf niemals grundsätzlich am vorherigen Ort verbleiben.
+      let previewLocationSerial=0;
+      const previewLocationCache=new Map();
+      function validPreviewBounds(raw){
+        if(!Array.isArray(raw)||raw.length!==2||
+           !Array.isArray(raw[0])||!Array.isArray(raw[1]))return null;
+        const area=raw.map(a=>a.map(Number));
+        const [south,west]=area[0],[north,east]=area[1];
+        if(![south,west,north,east].every(Number.isFinite)||
+            south < -90||north>90||west < -180||east>180||
+            south>=north||west>=east)return null;
+        return area;
+      }
+      function focusPreviewBounds(raw){
+        const bounds=validPreviewBounds(raw);
+        if(!bounds)return false;
+        map.fitBounds(bounds,{
+          paddingTopLeft:[20,24],
+          paddingBottomRight:[20,Math.min(165,Math.round(map.getSize().y*.2))],
+          maxZoom:16,animate:false
+        });
+        syncHistorical();
+        return true;
+      }
+      async function locatePreviewPlace(name){
+        const q=String(name||'').trim().slice(0,90);
+        if(!q)return null;
+        if(previewLocationCache.has(q))return previewLocationCache.get(q);
+        const endpoint='https://nominatim.openstreetmap.org/search?'+
+          new URLSearchParams({q,format:'jsonv2',limit:'1','accept-language':'de'});
+        const response=await fetch(endpoint,{headers:{Accept:'application/json'}});
+        if(!response.ok)throw Error('Ortssuche HTTP '+response.status);
+        const hits=await response.json(),hit=hits?.[0];
+        let bounds=null;
+        if(hit&&Array.isArray(hit.boundingbox)&&hit.boundingbox.length===4){
+          const [south,north,west,east]=hit.boundingbox.map(Number);
+          bounds=validPreviewBounds([[south,west],[north,east]]);
+        }
+        if(!bounds&&hit){
+          const lat=Number(hit.lat),lon=Number(hit.lon);
+          if(Number.isFinite(lat)&&Number.isFinite(lon))
+            bounds=validPreviewBounds([[lat-.02,lon-.03],[lat+.02,lon+.03]]);
+        }
+        previewLocationCache.set(q,bounds);
+        return bounds;
+      }
+      function previewPlaceQuery(item){
+        const region=String(item.region||'').trim();
+        if(region&&!['Berlin','Unbekannt','Alle','Weitere'].includes(region))
+          return region;
+        if(item.type==='geoportal'||item.type==='histomap')return '';
+        // Auch manuell eingetragene Titel wie "Paris 1880" erkennen,
+        // wenn bei der Erfassung noch "Berlin" als Region eingestellt war.
+        let name=String(item.name||'').replace(/\b(?:1[0-9]{3}|20[0-9]{2})\b/g,'')
+          .replace(/\([^)]*\)/g,'')
+          .replace(/^(?:(?:historisch(?:e|er|es|en)?|alt(?:e|er|es|en)?)\s+)?(?:stadtplan|landkarte|karte|plan|map|übersichtsplan)(?:\s+(?:von|of|de))?\s+/i,'')
+          .replace(/[·–—,_]/g,' ').replace(/\s+/g,' ').trim();
+        return name.length>=3?name.slice(0,85):'';
+      }
+      async function discoverPreviewBounds(item){
+        const direct=validPreviewBounds(item.bounds);
+        if(direct)return direct;
+        if(item.type==='geoportal'&&window.AtlasGeoportal?.capabilities){
+          try{
+            const cap=await window.AtlasGeoportal.capabilities(item.sourceUrl);
+            const match=(cap.leaves||[]).find(l=>l.name===item.layerName||
+              l.name.endsWith(':'+item.layerName));
+            const box=match?.box;
+            if(Array.isArray(box)&&box.length===4){
+              const bounds=validPreviewBounds([[box[1],box[0]],[box[3],box[2]]]);
+              if(bounds)return bounds;
+            }
+          }catch(_){/* Fallback auf Herkunftsregion. */}
+        }
+        const q=previewPlaceQuery(item);
+        if(q){
+          try{
+            const b=await locatePreviewPlace(q);
+            if(b)return b;
+          }catch(_){/* Ein externer Geocoding-Fehler blockiert die Vorschau nicht. */}
+        }
+        // Nur bei einer ausdrücklich bekannten Region lokal zentrieren.
+        const area=regionDefinitions[item.region];
+        if(area){
+          const [lat,lon]=area.center;
+          return validPreviewBounds([[lat-.02,lon-.03],[lat+.02,lon+.03]]);
+        }
+        return null;
+      }
       function previewMap(item){
         if(!item?.sourceUrl||!/^https?:\/\//i.test(item.sourceUrl))
           throw Error("Die Vorschau benötigt eine gültige Kartenadresse.");
@@ -981,12 +1073,9 @@
         if(layer&&historicalMap.hasLayer(layer))historicalMap.removeLayer(layer);
         const m={...item,region:item.region||'Berlin',name:item.name||'Neue Karte',
           provider:item.provider||'Kartenanbieter',layerName:item.layerName||'auto'};
-        if(!regionDefinitions[m.region])m.region='Berlin';
+        const serial=++previewLocationSerial;
         try{
-          const source=window.AtlasGeoportal?.services.find(e=>m.sourceUrl==='https://gdi.berlin.de/services/wms/'+e.slug);
-          if(m.region==='Berlin'&&(!active||active.region!=='Berlin')){
-            map.setView(regionDefinitions.Berlin.center,Math.max(13,source?.focusZoom||13),{animate:false});
-          }else if(source?.focusZoom&&map.getZoom()<source.focusZoom)map.setZoom(source.focusZoom,{animate:false});
+          const jumped=focusPreviewBounds(m.bounds);
           syncHistorical();
           preview={item:{...item},layer:createDisplayLayer(m)};
           preview.layer.addTo(historicalMap);
@@ -999,7 +1088,23 @@
           applyPane();
           $('managerDialog')?.close();
           $('sidebar').classList.remove('open');
-          setNotice('Vorschau geöffnet. Prüfe die Karte und speichere sie nur, wenn du sie behalten möchtest.',4200);
+          map.invalidateSize({animate:false,pan:false});
+          historicalMap.invalidateSize({animate:false,pan:false});
+          if(!jumped){
+            void discoverPreviewBounds(m).then(bounds=>{
+              if(serial!==previewLocationSerial||!preview)return;
+              if(bounds){
+                preview.item.bounds=bounds;
+                focusPreviewBounds(bounds);
+              }else{
+                setNotice('Kartengebiet nicht ermittelbar. Bitte den Ausschnitt manuell wählen.');
+              }
+            }).catch(()=>{
+              if(serial===previewLocationSerial&&preview)
+                setNotice('Standort der Karte konnte nicht bestimmt werden.');
+            });
+          }
+          setNotice('Vorschau geöffnet. Du kannst die Karte jetzt prüfen und speichern.');
         }catch(error){
           discardPreview(true);
           throw error;
