@@ -76,7 +76,7 @@ function parseCSW(xml){
 
 // WMS-URL aus amtlichem Metadatensatz; niemals willkuerliche Webseiten
 // oder private IPs als Kartendienst behandeln.
-function normalizeCatalogWms(raw){
+function normalizeCatalogWms(raw,verifiedProtocol=false){
  try{
   let value=String(raw||"").trim().replaceAll("&amp;","&");
   value=value.replace(/[),;.]+$/,"");
@@ -89,7 +89,8 @@ function normalizeCatalogWms(raw){
     host==="127.0.0.1"||host==="0.0.0.0"||host==="::1"||
     /^(?:10|127|192\.168|169\.254)\./.test(host)||
     /^172\.(?:1[6-9]|2\d|3[01])\./.test(host))return null;
-  if(!/(?:^|[\/_.-])(?:wms|ows)(?:$|[\/_.-])/i.test(u.pathname)&&
+  if(!verifiedProtocol&&
+     !/(?:^|[\/_.-])(?:wms|ows)(?:$|[\/_.-])/i.test(u.pathname)&&
      !/^(?:WMS)$/i.test(u.searchParams.get("service")||""))return null;
   for(const key of [...u.searchParams.keys()]){
    if(/^(?:service|request|version|layers|styles|format|transparent|bbox|width|height|srs|crs)$/i.test(key))
@@ -111,19 +112,24 @@ function parseNationalCSW(xml){
   const title=textElement(record,"title")||"Amtlicher Kartendienst";
   const description=textElement(record,"abstract")||textElement(record,"description")||"";
   const elements=Array.from(record.getElementsByTagName("*"));
-  const urls=new Set();
+  const urls=new Map();
   for(const el of elements){
    if(!["URL","linkage","OnlineResource","CI_OnlineResource"].includes(el.localName))continue;
+   let resource=el;
+   while(resource?.parentElement&&resource.localName!=="CI_OnlineResource")
+    resource=resource.parentElement;
+   const protocol=String(resource?.textContent||"");
+   const trustedWms=/OGC[:/ -]*WMS|WMS[:/ -]*1\.[013]/i.test(protocol);
    const pieces=[el.textContent||"",...Array.from(el.attributes||[]).map(a=>a.value)];
    for(const piece of pieces){
     for(const match of String(piece).matchAll(/https?:\/\/[^\s"'<>]+/gi))
-     urls.add(match[0]);
+     urls.set(match[0],trustedWms||urls.get(match[0])||false);
    }
   }
   // Fuer Dienste, deren URI als einfacher ISO-Text beschrieben wird.
   if(!urls.size){
    for(const match of (record.textContent||"").matchAll(/https?:\/\/[^\s"'<>]+/gi))
-    urls.add(match[0]);
+    urls.set(match[0],false);
   }
   const metadata=[];
   for(const el of elements){
@@ -133,8 +139,8 @@ function parseNationalCSW(xml){
     metadata.push({name:(el.parentElement?.localName||"")+" · "+el.localName,value});
   }
   const metadataXml=new XMLSerializer().serializeToString(record);
-  for(const raw of urls){
-   const url=normalizeCatalogWms(raw);
+  for(const [raw,protocolIsWms] of urls){
+   const url=normalizeCatalogWms(raw,protocolIsWms);
    if(url&&!results.has(url))
     results.set(url,{title,description,url,metadata,metadataXml});
   }
