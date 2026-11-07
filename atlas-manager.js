@@ -86,21 +86,8 @@
       maps.push(item);
     });
     maps.forEach(function (m, index) { m.id = index; m.hidden = !!m.hidden || hidden.has(index); });
-    // The Berlin tree inventory is a normal selectable map, not a second
-    // permanent overlay. Append it AFTER existing custom maps to preserve IDs,
-    // favorites, shared links and all 44 original maps.
-    var treeUrl="https://gdi.berlin.de/services/wms/baumbestand";
-    var treeWasAdded=false;
-    if(window.AtlasGeoportal &&
-       !maps.some(function(m){return m&&m.sourceUrl===treeUrl&&m.type==="geoportal";})) {
-      var treeMap=sanitizeMap({
-        name:"Baumbestand Berlin · aktuell",region:"Berlin",year:null,
-        sourceUrl:treeUrl,detailUrl:"https://gdi.berlin.de/view/baumbestand",
-        provider:"Geoportal Berlin / Land Berlin",type:"geoportal",layerName:"auto"
-      });
-      treeMap.id=maps.length;treeMap.custom=true;maps.push(treeMap);
-      treeWasAdded=true;
-    }
+    // Keine automatisch installierten Karten. Auch der Baumbestand wird
+    // ausschliesslich ueber die Fachkartensuche auf Wunsch hinzugefuegt.
 
     function sanitizeMap(v) {
       var type = v.type === "geoportal" ? "geoportal" : v.type === "histomap" ? "histomap" : v.type === "wms" ? "wms" : v.type === "wmts" ? "wmts" : v.type === "tms" ? "tms" : "xyz";
@@ -555,9 +542,6 @@
     if (window.AtlasGeoportal) window.AtlasGeoportal.mount({
       parent:el("managerDiscover"),maps:maps,preview:previewDiscoveredMap
     });
-    // Persist the migrated tree card once, including its stable ID.
-    // Other user maps, hidden state and favorites remain unchanged.
-    if(treeWasAdded)persist();
     return {open:open,editMap:editMap,beginNewMap:beginNewMap,removeMap:removeMap,previewDiscoveredMap,saveDiscoveredMap};
   }
   window.AtlasManager = {mount:mount};
