@@ -4,6 +4,29 @@
 "use strict";
 const CSW="https://gdi.berlin.de/geonetwork/srv/ger/csw";
 const BASE="https://gdi.berlin.de/services/wms/";
+const FEDERAL_CSW="https://gdk.gdi-de.org/gdi-de/srv/ger/csw";
+// Grobe Suchfenster fuer raeumliche Katalogabfragen, keine Landesgrenzen.
+// Die bundesweite Quelle ist der amtliche Geodatenkatalog.de (GDI-DE).
+const STATES=[
+ {name:"Baden-Württemberg",code:"BW",box:[7.4,47.5,10.6,49.85],portal:"https://www.geoportal-bw.de/"},
+ {name:"Bayern",code:"BY",box:[8.85,47.15,13.95,50.6],portal:"https://geoportal.bayern.de/geoportalbayern/"},
+ {name:"Berlin",code:"BE",box:[13.07,52.32,13.8,52.69],portal:"https://gdi.berlin.de/"},
+ {name:"Brandenburg",code:"BB",box:[11.2,51.28,14.85,53.58],portal:"https://geoportal.brandenburg.de/"},
+ {name:"Bremen",code:"HB",box:[8.4,52.98,9.04,53.66],portal:"https://geoportal.bremen.de/"},
+ {name:"Hamburg",code:"HH",box:[9.65,53.36,10.38,53.76],portal:"https://geoportal-hamburg.de/"},
+ {name:"Hessen",code:"HE",box:[7.7,49.28,10.28,51.73],portal:"https://www.geoportal.hessen.de/"},
+ {name:"Mecklenburg-Vorpommern",code:"MV",box:[10.55,53,14.48,54.78],portal:"https://www.geoportal-mv.de/portal/"},
+ {name:"Niedersachsen",code:"NI",box:[6.55,51.28,11.75,53.96],portal:"https://www.geodaten.niedersachsen.de/"},
+ {name:"Nordrhein-Westfalen",code:"NW",box:[5.85,50.29,9.49,52.56],portal:"https://www.geoportal.nrw/"},
+ {name:"Rheinland-Pfalz",code:"RP",box:[6.09,48.9,8.52,50.95],portal:"https://www.geoportal.rlp.de/"},
+ {name:"Saarland",code:"SL",box:[6.32,49.1,7.46,49.68],portal:"https://geoportal.saarland.de/"},
+ {name:"Sachsen",code:"SN",box:[11.83,50.16,15.08,51.71],portal:"https://geoportal.sachsen.de/"},
+ {name:"Sachsen-Anhalt",code:"ST",box:[10.48,50.9,13.23,53.06],portal:"https://www.lvermgeo.sachsen-anhalt.de/"},
+ {name:"Schleswig-Holstein",code:"SH",box:[7.75,53.35,11.38,55.1],portal:"https://www.gdi-sh.de/"},
+ {name:"Thüringen",code:"TH",box:[9.8,50.16,12.78,51.73],portal:"https://www.geoportal-th.de/"}
+];
+const stateFor=code=>STATES.find(s=>s.code===code)||STATES[2];
+
 const THEMES=["Alle","Luftbilder","Historische Karten","Verkehr","Baumbestand","Umweltatlas","Klima","Stadtplanung","Denkmäler","Gewässer"];
 function node(tag,text,cl){const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cl)e.className=cl;return e;}
 function textElement(n,key){
@@ -50,23 +73,107 @@ function parseCSW(xml){
  }
  return {results:[...results.values()],matched};
 }
+
+// WMS-URL aus amtlichem Metadatensatz; niemals willkuerliche Webseiten
+// oder private IPs als Kartendienst behandeln.
+function normalizeCatalogWms(raw){
+ try{
+  let value=String(raw||"").trim().replaceAll("&amp;","&");
+  value=value.replace(/[),;.]+$/,"");
+  const u=new URL(value);
+  if(u.protocol!=="https:"&&u.protocol!=="http:")return null;
+  if(u.username||u.password)return null;
+  if(u.protocol==="http:")u.protocol="https:";
+  const host=u.hostname.toLowerCase();
+  if(host==="localhost"||host.endsWith(".local")||host==="gdk.gdi-de.org"||
+    host==="127.0.0.1"||host==="0.0.0.0"||host==="::1"||
+    /^(?:10|127|192\.168|169\.254)\./.test(host)||
+    /^172\.(?:1[6-9]|2\d|3[01])\./.test(host))return null;
+  if(!/(?:^|[\/_.-])(?:wms|ows)(?:$|[\/_.-])/i.test(u.pathname)&&
+     !/^(?:WMS)$/i.test(u.searchParams.get("service")||""))return null;
+  for(const key of [...u.searchParams.keys()]){
+   if(/^(?:service|request|version|layers|styles|format|transparent|bbox|width|height|srs|crs)$/i.test(key))
+    u.searchParams.delete(key);
+  }
+  u.hash="";
+  return u.href.replace(/\?$/,"");
+ }catch(_){return null;}
+}
+function parseNationalCSW(xml){
+ const doc=new DOMParser().parseFromString(xml,"application/xml");
+ if(doc.getElementsByTagName("parsererror").length)throw Error("Ungültige Katalogantwort.");
+ const root=Array.from(doc.getElementsByTagName("*")).find(e=>e.localName==="SearchResults");
+ if(!root)throw Error("Der bundesweite Geodatenkatalog liefert keine gültige CSW-Trefferliste.");
+ const matched=Number(root.getAttribute("numberOfRecordsMatched")||0);
+ const records=Array.from(root.children).filter(x=>/Record|MD_Metadata/i.test(x.localName));
+ const results=new Map();
+ for(const record of records){
+  const title=textElement(record,"title")||"Amtlicher Kartendienst";
+  const description=textElement(record,"abstract")||textElement(record,"description")||"";
+  const elements=Array.from(record.getElementsByTagName("*"));
+  const urls=new Set();
+  for(const el of elements){
+   if(!["URL","linkage","OnlineResource","CI_OnlineResource"].includes(el.localName))continue;
+   const pieces=[el.textContent||"",...Array.from(el.attributes||[]).map(a=>a.value)];
+   for(const piece of pieces){
+    for(const match of String(piece).matchAll(/https?:\/\/[^\s"'<>]+/gi))
+     urls.add(match[0]);
+   }
+  }
+  // Fuer Dienste, deren URI als einfacher ISO-Text beschrieben wird.
+  if(!urls.size){
+   for(const match of (record.textContent||"").matchAll(/https?:\/\/[^\s"'<>]+/gi))
+    urls.add(match[0]);
+  }
+  const metadata=[];
+  for(const el of elements){
+   if(el.children.length)continue;
+   const value=(el.textContent||"").trim();
+   if(value&&value.length<12000)
+    metadata.push({name:(el.parentElement?.localName||"")+" · "+el.localName,value});
+  }
+  const metadataXml=new XMLSerializer().serializeToString(record);
+  for(const raw of urls){
+   const url=normalizeCatalogWms(raw);
+   if(url&&!results.has(url))
+    results.set(url,{title,description,url,metadata,metadataXml});
+  }
+ }
+ return {results:[...results.values()],matched};
+}
+function makeNationalConstraint(query,state,category,mode="bounds"){
+ const topic="TopicCategory = '"+String(category||"").replace(/[^A-Za-z]/g,"")+"'";
+ const term=normalQuery(query);
+ const bbox=state.box.join(",");
+ const space=mode==="bounds"
+  ?"BBOX(ows:BoundingBox,"+bbox+")"
+  :"AnyText like '%"+state.name.replace(/[^A-Za-zÄÖÜäöüß -]/g,"")+"%'";
+ return [topic,space,...(term?["AnyText like '%"+term+"%'"]:[])].join(" AND ");
+}
 async function searchCSW(query,start,options={}){
+ const isFederal=!!options.state&&options.state.code!=="BE";
+ const endpoint=isFederal?FEDERAL_CSW:CSW;
  const parameters=new URLSearchParams({
   SERVICE:"CSW",REQUEST:"GetRecords",VERSION:"2.0.2",
   resultType:"results",typeNames:"csw:Record",elementSetName:"full",
   outputSchema:"http://www.isotc211.org/2005/gmd",
   maxRecords:"30",startPosition:String(start),
   constraintLanguage:"CQL_TEXT",constraint_language_version:"1.1.0",
-  constraint: options.category
-    ? "TopicCategory = '"+String(options.category).replace(/[^A-Za-z]/g,"")+"'"
-    : "AnyText like '%"+normalQuery(query)+"%'"
+  constraint:isFederal
+   ?makeNationalConstraint(query,options.state,options.category,options.mode||"bounds")
+   :options.category
+    ?"TopicCategory = '"+String(options.category).replace(/[^A-Za-z]/g,"")+"'"
+    :"AnyText like '%"+normalQuery(query)+"%'"
  });
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),16000);
  try{
-  const response=await fetch(CSW+"?"+parameters.toString(),{mode:"cors",signal:ctl.signal,
-   headers:{Accept:"application/xml,text/xml,*/*"}});
+  const response=await fetch(endpoint+"?"+parameters.toString(),{
+   mode:"cors",signal:ctl.signal,headers:{Accept:"application/xml,text/xml,*/*"}
+  });
   if(!response.ok)throw Error("CSW HTTP "+response.status);
-  return parseCSW(await response.text());
+  const xml=await response.text();
+  if(/<(?:(?:\w+):)?ExceptionReport\b/i.test(xml))throw Error("CSW-Suchfilter nicht unterstützt");
+  return isFederal?parseNationalCSW(xml):parseCSW(xml);
  }finally{clearTimeout(timer);}
 }
 function safeLink(value){
