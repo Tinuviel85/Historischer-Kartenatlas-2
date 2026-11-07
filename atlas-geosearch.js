@@ -26,6 +26,63 @@ const STATES=[
  {name:"Thüringen",code:"TH",box:[9.8,50.16,12.78,51.73],portal:"https://www.geoportal-th.de/"}
 ];
 const stateFor=code=>STATES.find(s=>s.code===code)||STATES[2];
+// Die Laender fuehren unterschiedliche, eigenstaendige Kartenmenues.
+// Diese Namen sind aus den offiziellen Landesportalen entnommen und sind
+// bewusst KEINE angeblich identische 16er-ISO-Navigationsstruktur.
+// Direkte Dienste werden nur nach amtlich dokumentierter URL hinterlegt.
+const LAND_NAV={
+ BW:{entry:"Themenkarten",groups:["Umwelt und Energie","Schutzgebiete","Landentwicklung"],portal:"https://www.geoportal-bw.de/themenkarten"},
+ BB:{entry:"Themenkarten",groups:["Schmettausches Kartenwerk","Liegenschaftskataster","Bodendenkmale","Geologische Karten","Bebauungspläne","Schutzgebiete","Gewässernetz","Biotopkartierung","Starkregengefahren"],portal:"https://geoportal.brandenburg.de/de/cms/portal/geodaten/themenkarten"},
+ HB:{entry:"Fachdaten",groups:[],portal:"https://www.geo.bremen.de/online-dienste/geoportal-bremen-14419"},
+ HH:{entry:"Themen hinzufügen",groups:[],portal:"https://geoportal-hamburg.de/"},
+ HE:{entry:"Themen",groups:["Historische Luftbilder","Liegenschaftskarte Hessen","Überschwemmungsgebiete Hessen","Bodenrichtwerte"],portal:"https://www.geoportal.hessen.de/"},
+ MV:{entry:"Themenkarten",groups:["Flurstücke (ALKIS)","Bodenrichtwerte","Grundsteuer","Luftbilder (Digitale Orthophotos)","Schutzgebiete","Forstwirtschaft","Landwirtschaft"],portal:"https://www.geoportal-mv.de/portal/"},
+ NI:{entry:"Geodatensuche",groups:[],portal:"https://www.geodaten.niedersachsen.de/"},
+ NW:{entry:"Kartensuche",groups:[],portal:"https://www.geoportal.nrw/"},
+ RP:{entry:"Kategorien und Themen",groups:["Liegenschaften RP"],portal:"https://www.geoportal.rlp.de/"},
+ SL:{entry:"Geodatensuche",groups:[],portal:"https://geoportal.saarland.de/"},
+ SN:{entry:"Themen hinzuladen",groups:[],portal:"https://geoportal.sachsen.de/"},
+ ST:{entry:"Open Data",groups:["Karten und Luftbilder","Landschafts- und Höhenmodelle","Kartographische Präsentationen / Themenkarten"],portal:"https://www.geodatenportal.sachsen-anhalt.de/"},
+ SH:{entry:"Geodatensuche",groups:[],portal:"https://www.gdi-sh.de/"},
+ TH:{entry:"Übersichtskarten",groups:["Thematische Übersichtskarten","Historische Katastersysteme"],portal:"https://geoportal.geoportal-th.de/gaialight-th/_apps/dladownload/dl-karten.html"}
+};
+const BAYERN_THEMES=[
+ "Freizeit in Bayern","Geobasisdaten","Planen und Bauen",
+ "Infrastruktur","Umwelt","Naturgefahren","Zeitreise",
+ "Verwaltungsatlas","Energie","Heimat","Schulatlas"
+];
+const BAYERN_WMTS="https://geoservices.bayern.de/od/wmts/geobasis/v1/1.0.0/WMTSCapabilities.xml";
+const BAYERN_MAPSERVICE={
+ title:"Geobasisdaten Bayern (amtlicher WMTS)",
+ url:BAYERN_WMTS,type:"wmts",license:"CC BY 4.0",
+ layers:[
+  {title:"Topographische Karten Bayern",name:"by_amtl_karte",ext:"png"},
+  {title:"Luftbild Bayern",name:"by_dop",ext:"jpeg"},
+  {title:"Luftbild Colorinfrarot Bayern",name:"by_dop_cir",ext:"jpeg"},
+  {title:"Beschriftungen Bayern",name:"by_label",ext:"png"},
+  {title:"Webkarte Bayern",name:"by_webkarte",ext:"png"},
+  {title:"Webkarte Grau Bayern",name:"by_webkarte_grau",ext:"png"}
+ ]
+};
+// Auszug bestaetigter offener Dienste von geoportal.bayern.de/geoportalbayern/seiten/dienste
+const BAYERN_SERVICES=[
+ {title:"Historische Orthophotos (DOP) 2003–heute",url:"https://geoservices.bayern.de/od/wms/histdop/v1/histdop",theme:"Zeitreise"},
+ {title:"Digitale Topographische Karte 1:500 000",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dtk500",theme:"Geobasisdaten",fallbackLayers:[{name:"by_dtk500",title:"Digitale Topographische Karte Bayern 1:500 000",crs:["EPSG:25832"]}]},
+ {title:"Digitale Topographische Karte 1:25 000",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dtk25",theme:"Geobasisdaten"},
+ {title:"Digitale Ortskarte Bayern",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dok",theme:"Geobasisdaten"},
+ {title:"Digitale Geologische Karte 1:25 000",url:"https://www.lfu.bayern.de/gdi/wms/geologie/dgk25",theme:"Umwelt"},
+ {title:"Übersichtsbodenkarte 1:25 000",url:"https://www.lfu.bayern.de/gdi/wms/boden/uebk25",theme:"Umwelt"},
+ {title:"Lärm an Hauptverkehrsstraßen",url:"https://www.lfu.bayern.de/gdi/wms/laerm/hauptverkehrsstrassen",theme:"Umwelt"},
+ {title:"Lärm in Ballungsräumen",url:"https://www.lfu.bayern.de/gdi/wms/laerm/ballungsraeume",theme:"Umwelt"},
+ {title:"Höhenlinien Bayern",url:"https://geoservices.bayern.de/od/wms/dgm/v1/hl",theme:"Geobasisdaten"},
+ {title:"BAYSIS Verkehrsdaten",url:"https://gisportal-stmb.bayern.de/server/services/WMS/BAYSIS_Verkehrsdaten/MapServer/WMSServer",theme:"Infrastruktur"},
+ {title:"Bebauungspläne Stadt München",url:"https://geoportal.muenchen.de/geoserver/plan/wms",theme:"Planen und Bauen"},
+ {title:"Verwaltungsatlas Bayern – Verwaltungsgebiete",url:"https://gdiserv.bayern.de/srv1970/services/verwaltungsatlas_verwaltungsgrenzen_view-wms",theme:"Verwaltungsatlas"},
+ {title:"Strukturkarte des Landesentwicklungsprogramms",url:"https://gdiserv.bayern.de/srv43522/services/strukturkarte-wms",theme:"Planen und Bauen"},
+ {title:"Alpenplan",url:"https://gdiserv.bayern.de/srv1970/services/alpenplan-wms",theme:"Planen und Bauen"}
+];
+const BAVARIA_CENTER=[[48.06,11.40],[48.23,11.76]]; // Ausschnitt Muenchen fuer die Vorschau, keine Landes-BBOX
+
 
 const THEMES=["Alle","Luftbilder","Historische Karten","Verkehr","Baumbestand","Umweltatlas","Klima","Stadtplanung","Denkmäler","Gewässer"];
 function node(tag,text,cl){const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cl)e.className=cl;return e;}
