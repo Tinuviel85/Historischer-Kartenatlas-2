@@ -957,6 +957,40 @@
               ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
               : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true});
       }
+      // Der Entdeckungsdialog bleibt mitsamt Suchergebnissen, geöffneten
+      // Anbietern und Scrollposition im DOM erhalten.
+      let previewReturnState=null;
+      function capturePreviewReturnState(){
+        const dialog=$('managerDialog');
+        if(!dialog?.open)return null;
+        const scrollArea=dialog.querySelector('.manager-inner');
+        return {
+          scrollTop:scrollArea?.scrollTop||0,
+          openedDetails:Array.from(dialog.querySelectorAll('details[open]'))
+            .map(el=>el.id).filter(Boolean)
+        };
+      }
+      function returnToPreviewSearch(){
+        const state=previewReturnState;
+        previewReturnState=null;
+        if(!state)return;
+        const dialog=$('managerDialog');
+        if(!dialog)return;
+        // open() setzt lediglich die schon vorhandene Suche sichtbar,
+        // startet aber keine erneute Recherche oder ersetzt Treffer.
+        window.atlasManager?.open('discover');
+        for(const id of state.openedDetails){
+          const el=document.getElementById(id);
+          if(el?.tagName==='DETAILS')el.open=true;
+        }
+        const area=dialog.querySelector('.manager-inner');
+        requestAnimationFrame(()=>{
+          if(area)area.scrollTop=state.scrollTop;
+          requestAnimationFrame(()=>{
+            if(area)area.scrollTop=state.scrollTop;
+          });
+        });
+      }
       function discardPreview(restore=true){
         previewLocationSerial++;
         if(!preview)return;
@@ -1070,6 +1104,7 @@
         if(!item?.sourceUrl||!/^https?:\/\//i.test(item.sourceUrl))
           throw Error("Die Vorschau benötigt eine gültige Kartenadresse.");
         discardPreview(true);
+        previewReturnState=capturePreviewReturnState();
         if(layer&&historicalMap.hasLayer(layer))historicalMap.removeLayer(layer);
         const m={...item,region:item.region||'Berlin',name:item.name||'Neue Karte',
           provider:item.provider||'Kartenanbieter',layerName:item.layerName||'auto'};
@@ -1110,7 +1145,11 @@
           throw error;
         }
       }
-      $('atlasPreviewDiscard').addEventListener('click',()=>discardPreview(true));
+      $('atlasPreviewDiscard').addEventListener('click',()=>{
+        if(!preview)return;
+        discardPreview(true);
+        returnToPreviewSearch();
+      });
       $('atlasPreviewSave').addEventListener('click',async()=>{
         if(!preview)return;
         const item={...preview.item};
@@ -1127,6 +1166,7 @@
       function selectMap(id,{restoreView=false}={}){
         const m=maps[id];if(!m||m.hidden)return;
         discardPreview(false);
+        previewReturnState=null;
         const previous=active;
         dismissNotice();
         if(layer){historicalMap.removeLayer(layer);layer=null;}
