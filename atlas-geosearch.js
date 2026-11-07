@@ -66,7 +66,7 @@ const BAYERN_MAPSERVICE={
 };
 // Auszug bestaetigter offener Dienste von geoportal.bayern.de/geoportalbayern/seiten/dienste
 const BAYERN_SERVICES=[
- {title:"Historische Orthophotos (DOP) 2003–heute",url:"https://geoservices.bayern.de/od/wms/histdop/v1/histdop",theme:"Zeitreise"},
+ {title:"Historische Orthophotos (DOP) ab 2003",url:"https://geoservices.bayern.de/od/wms/histdop/v1/histdop",type:"historical-dop",theme:"Zeitreise"},
  {title:"Digitale Topographische Karte 1:500 000",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dtk500",theme:"Geobasisdaten",fallbackLayers:[{name:"by_dtk500",title:"Digitale Topographische Karte Bayern 1:500 000",crs:["EPSG:25832"]}]},
  {title:"Digitale Topographische Karte 1:25 000",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dtk25",theme:"Geobasisdaten"},
  {title:"Digitale Ortskarte Bayern",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dok",theme:"Geobasisdaten"},
@@ -518,6 +518,61 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   }finally{clearTimeout(timeout);}
  }
 
+
+// Amtlicher WMS mit bekanntem Schema by_dop_<Jahr>_h. Bei fehlendem
+// Cross-Origin-GetCapabilities bleibt ein explizit vom Nutzer gewaehltes
+// Befliegungsjahr erreichbar: die Existenz prueft dann der WMS selbst.
+function showBavariaHistory(view){
+ results.replaceChildren();
+ const card=node("div",null,"gdi-layer-card");
+ const heading=node("strong","Historische Digitale Orthophotos – Jahrgang wählen");
+ const year=node("input");year.type="number";year.min="2003";year.max="2026";
+ year.placeholder="z. B. 2018";year.required=true;
+ year.style.cssText="width:100%;padding:11px;border:1px solid #c9dfce;border-radius:10px;margin:10px 0";
+ const button=node("button","Jahrgang auf Karte legen");button.type="button";
+ const info=node("p","Das Bayerische Landesamt stellt jedes Befliegungsjahr mit dem Namensschema by_dop_JAHR_h bereit. Die Verfügbarkeit des gewünschten Jahrgangs wird beim Laden geprüft.","gdi-hint");
+ const available=node("div");available.className="gdi-layer-filter";
+ const request=(yr)=>{
+  const n=Number(yr);
+  if(!Number.isInteger(n)||n<2003||n>2026){
+   setStatus("Bitte ein Befliegungsjahr zwischen 2003 und 2026 eingeben.");
+   return;
+  }
+  const name="by_dop_"+n+"_h";
+  try{preview({
+   name:"Historisches Orthophoto Bayern "+n,year:n,region:"Bayern",
+   sourceUrl:view.service.url,type:"wms",layerName:name,
+   bounds:[[47.15,8.85],[50.60,13.95]],previewBounds:BAVARIA_CENTER,
+   detailUrl:"https://geodatenonline.bayern.de/geodatenonline/seiten/wms_dop_hist",
+   provider:"Bayerische Vermessungsverwaltung (LDBV)"
+  });}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
+ };
+ button.addEventListener("click",()=>request(year.value));
+ card.append(heading,year,button,info);
+ results.append(card,available);
+ setStatus("Befliegungsjahr auswählen. Die Jahre gehören zu unterschiedlichen Teilgebieten Bayerns.");
+ const token=++requestId;
+ void getServiceCapabilities(view.service.url,view.state).then(cap=>{
+  if(present()!==view||token!==requestId)return;
+  const matches=(cap.leaves||[]).filter(l=>/^by_dop_20\d{2}_h$/.test(l.name));
+  if(!matches.length)return;
+  available.replaceChildren();
+  const hint=node("p","Vom WMS gemeldete Jahrgänge:","gdi-hint");
+  available.append(hint);
+  const wrap=node("div",null,"gdi-palette");
+  for(const layer of matches){
+   const y=Number(layer.name.match(/20\d{2}/)?.[0]);
+   const btn=node("button",String(y));btn.type="button";
+   btn.addEventListener("click",()=>request(y));
+   wrap.append(btn);
+  }
+  available.append(wrap);
+  setStatus(matches.length+" tatsächlich vom Bayerischen WMS bestätigte Jahrgänge.");
+ }).catch(()=>{
+  if(present()===view&&token===requestId)
+   setStatus("Die WMS-Jahrgangsliste ist aus diesem Browser nicht abrufbar. Du kannst einen Jahrgang nach dem amtlich dokumentierten Namensschema direkt ausprobieren.");
+ });
+}
  function showBavariaWmts(view){
   const svc=view.service,body=node("div");
   results.replaceChildren();
@@ -531,7 +586,8 @@ function mount({parent,maps,preview,capabilities,services=[]}){
     const item={
      name:layer.title,year:null,region:"Bayern",
      sourceUrl:tileUrl,type:"xyz",layerName:"",
-     bounds:BAVARIA_CENTER,
+     bounds:[[47.15,8.85],[50.60,13.95]],
+     previewBounds:BAVARIA_CENTER,
      detailUrl:"https://geodatenonline.bayern.de/geodatenonline/seiten/wmts_ba",
      provider:"Bayerische Vermessungsverwaltung (LDBV)"
     };
@@ -551,6 +607,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  }
  async function loadLayers(view){
   if(view.service.type==="wmts"){showBavariaWmts(view);return;}
+  if(view.service.type==="historical-dop"){showBavariaHistory(view);return;}
   const id=++requestId;
   try{
    let info;
