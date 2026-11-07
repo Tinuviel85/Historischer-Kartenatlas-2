@@ -50,14 +50,16 @@ function parseCSW(xml){
  }
  return {results:[...results.values()],matched};
 }
-async function searchCSW(query,start){
+async function searchCSW(query,start,options={}){
  const parameters=new URLSearchParams({
   SERVICE:"CSW",REQUEST:"GetRecords",VERSION:"2.0.2",
   resultType:"results",typeNames:"csw:Record",elementSetName:"full",
   outputSchema:"http://www.isotc211.org/2005/gmd",
   maxRecords:"30",startPosition:String(start),
   constraintLanguage:"CQL_TEXT",constraint_language_version:"1.1.0",
-  constraint:"AnyText like '%"+normalQuery(query)+"%'"
+  constraint: options.category
+    ? "TopicCategory = '"+String(options.category).replace(/[^A-Za-z]/g,"")+"'"
+    : "AnyText like '%"+normalQuery(query)+"%'"
  });
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),16000);
  try{
@@ -142,40 +144,25 @@ function yearOf(name){
  const m=String(name).match(/(?:18[6-9]\d|19\d{2}|20[0-2]\d)/);
  return m?Number(m[0]):null;
 }
-// Fachkarten navigation: theme > subtheme > service > layer. Every level
-// REPLACES the previous button palette, with a persistent Back action.
+// Amtliche ISO-19115-Themenkategorien wie im Geoportal Berlin.
+// Keine erfundenen Unterkategorien; alle Dienste werden aus dem CSW ermittelt.
 const TOPICS=[
- {label:"Planen & Bauen",icon:"▥",sub:[
-  ["Bebauungspläne","Bebauungsplan",[]],["Flächennutzungsplanung","Flächennutzungsplan",[]],
-  ["Städtebau & Quartiere","Stadtentwicklung",[]],["Planungsrecht","Planungsrecht",[]],
-  ["Grundstücke & Flurstücke","Flurstück",[]],["Wohnungsbau","Wohnungsbau",[]]]},
- {label:"Natur & Umwelt",icon:"♧",sub:[
-  ["Baumbestand","Baumbestand",["trees"]],["Grünflächen & Parks","Grünanlagen",[]],
-  ["Biotope & Artenschutz","Biotop",[]],["Schutzgebiete","Schutzgebiete",[]],
-  ["Klima & Stadtklima","Stadtklima",[]],["Boden & Altlasten","Boden",[]],
-  ["Gewässer","Gewässer",[]],["Umweltatlas","Umweltatlas",[]]]},
- {label:"Verkehr & Mobilität",icon:"⇄",sub:[
-  ["Straßen & Verkehr","Straßenverkehr",[]],["Bahn & ÖPNV","Schienenverkehr",[]],
-  ["Radverkehr","Radverkehr",[]],["Parken & Lieferverkehr","Parken",[]],
-  ["Verkehrszählung","Verkehrszählung",[]]]},
- {label:"Lärm & Immissionen",icon:"◉",sub:[
-  ["Straßenverkehrslärm","Straßenverkehrslärm",[]],["Schienenverkehrslärm","Schienenverkehrslärm",[]],
-  ["Lärmaktionsplanung","Lärm",[]],["Luftqualität","Luftqualität",[]],
-  ["Immissionsschutz","Immissionsschutz",[]]]},
- {label:"Geschichte & Denkmale",icon:"◷",sub:[
-  ["Historische Pläne","Historische Karten",["straube"]],
-  ["Denkmalkarte","Denkmalkarte",[]],["Historische Luftbilder","Luftbilder",["aerial1928","aerial1938","aerial1953"]],
-  ["Historische Stadtentwicklung","Stadtgeschichte",[]]]},
- {label:"Luftbilder & Fernerkundung",icon:"▧",sub:[
-  ["Historische Luftbilder","Luftbilder",["aerial1928","aerial1938","aerial1953"]],
-  ["Aktuelle Orthophotos","Orthophoto",["aerial2025"]],["Fernerkundung","Fernerkundung",[]]]},
- {label:"Wohnen & Gesellschaft",icon:"▦",sub:[
-  ["Einwohner & Sozialstruktur","Einwohner",[]],["Sozialatlas","Sozialatlas",[]],
-  ["Kitas & Schulen","Schulen",[]],["Gesundheit","Gesundheitsversorgung",[]]]},
- {label:"Weitere Fachkarten",icon:"⋯",sub:[
-  ["Verwaltung & Bezirke","Bezirksgrenzen",[]],["Energie","Energie",[]],
-  ["Wirtschaft & Gewerbe","Gewerbe",[]],["Geologie","Geologie",[]],
-  ["Alle verfügbaren Fachkarten","Berlin",[]]]}
+ {label:"Atmosphäre",code:"climatologyMeteorologyAtmosphere"},
+ {label:"Bauwerke",code:"structure"},
+ {label:"Binnengewässer",code:"inlandWaters"},
+ {label:"Biologie",code:"biota"},
+ {label:"Geowissenschaften",code:"geoscientificInformation"},
+ {label:"Gesellschaft",code:"society"},
+ {label:"Gesundheitswesen",code:"health"},
+ {label:"Grenzen",code:"boundaries"},
+ {label:"Höhenangaben",code:"elevation"},
+ {label:"Oberflächenbeschreibung",code:"imageryBaseMapsEarthCover"},
+ {label:"Ortsangaben",code:"location"},
+ {label:"Planungsunterlagen, Kataster",code:"planningCadastre"},
+ {label:"Umwelt",code:"environment"},
+ {label:"Ver- und Entsorgung/Kommunikation",code:"utilitiesCommunication"},
+ {label:"Verkehrswesen",code:"transportation"},
+ {label:"Wirtschaft",code:"economy"}
 ];
 const BASEMAP=/(?:^|[\s_\-])(basiskarte|grundkarte|hintergrund(?:karte)?|background|basemap|openstreetmap|webatlas|topplus|basiskarten)(?:$|[\s_\-])/i;
 const INDEXONLY=/bildmitten?|bildzentren|gebietsabdeckung|blattschnitt|bildindex|bildpunkte|footprints?|aufnahmeorte|flugstreifen|blattgrenze/i;
@@ -184,10 +171,10 @@ function isIndexed(x){return INDEXONLY.test((x.title||"")+" "+(x.name||""));}
 function mount({parent,maps,preview,capabilities,services=[]}){
  if(!parent||!preview||!capabilities)return;
  const styles=node("style");
- styles.textContent=".gdi-browser{border:0;padding:0;margin:0}.gdi-browser .gdi-browser-description{font-size:12px;line-height:1.5;color:#63786b;margin:0 0 11px}.gdi-browser .gdi-browser-search{display:flex;gap:8px}.gdi-browser .gdi-browser-search input{min-width:0;flex:1;padding:11px;border:1px solid #cadbce;border-radius:11px;font-size:13px;background:#fff}.gdi-browser button{font:700 12px system-ui;border-radius:11px;border:1px solid #c9dfce;padding:10px;color:#28533e;background:#f6f9f6;cursor:pointer}.gdi-browser button:disabled{opacity:.52}.gdi-browser .gdi-action{background:#245744;color:white;border-color:#245744}.gdi-browser .gdi-breadcrumb{font-size:11px;color:#718579;margin:13px 0 7px;line-height:1.45}.gdi-browser .gdi-navrow{display:flex;justify-content:space-between;align-items:center;gap:9px;margin:7px 0 12px}.gdi-browser .gdi-step-title{font-size:15px;font-weight:800;color:#224938;overflow-wrap:anywhere}.gdi-browser .gdi-back{background:#edf5ef;color:#245440;white-space:nowrap}.gdi-browser .gdi-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:9px;margin:10px 0}.gdi-browser .gdi-palette>button{display:flex;align-items:center;justify-content:space-between;text-align:left;gap:8px;min-height:57px;padding:12px 13px;line-height:1.35;background:#fff;border:1px solid #d6e5da;box-shadow:0 2px 7px #18402b0c;color:#254c3a}.gdi-browser .gdi-palette>button:hover,.gdi-browser .gdi-palette>button:focus-visible{background:#eaf4ed;border-color:#94b89f}.gdi-browser .gdi-arrow{font-size:20px;color:#6c977b;flex:none}.gdi-browser .gdi-palette>button .gdi-mini{display:block;color:#718478;font-size:10px;font-weight:400;margin-top:4px;overflow-wrap:anywhere}.gdi-browser .gdi-status{font-size:11px;color:#557360;line-height:1.5;margin:10px 0}.gdi-browser .gdi-layer-card{border:1px solid #d9e7dc;border-radius:12px;background:white;padding:11px;margin:8px 0}.gdi-browser .gdi-layer-card strong{display:block;font-size:12px;color:#264b39;overflow-wrap:anywhere}.gdi-browser .gdi-layer-card small{display:block;color:#6c7d72;font-size:11px;margin:5px 0;line-height:1.4}.gdi-browser .gdi-layer-card button{margin-top:7px;background:#245744;color:white;border-color:#245744}.gdi-browser .gdi-layer-filter{box-sizing:border-box;width:100%;border-radius:10px;border:1px solid #cdded0;padding:10px;margin:9px 0;font-size:13px}.gdi-browser .gdi-extra{border-top:1px solid #e1ebe4;margin-top:12px;padding-top:11px}.gdi-browser .gdi-extra a{color:#246345;font-size:12px}.gdi-browser .gdi-more{width:100%;margin:9px 0}.gdi-browser .gdi-hint{font-size:11px;color:#65786a;line-height:1.5}.gdi-browser .gdi-tag{font-size:10px;color:#577562}.gdi-browser .gdi-icon{font-size:19px;width:21px;flex:none}@media(max-width:470px){.gdi-browser .gdi-palette{grid-template-columns:1fr 1fr}.gdi-browser .gdi-palette>button{padding:11px 9px;min-height:64px;font-size:11px}.gdi-browser .gdi-icon{display:none}}";
+ styles.textContent=".gdi-browser{border:0;padding:0;margin:0}.gdi-browser .gdi-browser-description{font-size:12px;line-height:1.5;color:#63786b;margin:0 0 11px}.gdi-browser .gdi-browser-search{display:flex;gap:8px}.gdi-browser .gdi-browser-search input{min-width:0;flex:1;padding:11px;border:1px solid #cadbce;border-radius:11px;font-size:13px;background:#fff}.gdi-browser button{font:700 12px system-ui;border-radius:11px;border:1px solid #c9dfce;padding:10px;color:#28533e;background:#f6f9f6;cursor:pointer}.gdi-browser button:disabled{opacity:.52}.gdi-browser .gdi-action{background:#245744;color:white;border-color:#245744}.gdi-browser .gdi-breadcrumb{font-size:11px;color:#718579;margin:13px 0 7px;line-height:1.45}.gdi-browser .gdi-navrow{display:flex;justify-content:space-between;align-items:center;gap:9px;margin:7px 0 12px}.gdi-browser .gdi-step-title{font-size:15px;font-weight:800;color:#224938;overflow-wrap:anywhere}.gdi-browser .gdi-back{background:#edf5ef;color:#245440;white-space:nowrap}.gdi-browser .gdi-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:9px;margin:10px 0}.gdi-browser .gdi-palette>button{display:flex;align-items:center;justify-content:space-between;text-align:left;gap:8px;min-height:57px;padding:12px 13px;line-height:1.35;background:#fff;border:1px solid #d6e5da;box-shadow:0 2px 7px #18402b0c;color:#254c3a}.gdi-browser .gdi-palette>button:hover,.gdi-browser .gdi-palette>button:focus-visible{background:#eaf4ed;border-color:#94b89f}.gdi-browser .gdi-arrow{font-size:20px;color:#6c977b;flex:none}.gdi-browser .gdi-palette>button .gdi-mini{display:block;color:#718478;font-size:10px;font-weight:400;margin-top:4px;overflow-wrap:anywhere}.gdi-browser .gdi-status{font-size:11px;color:#557360;line-height:1.5;margin:10px 0}.gdi-browser .gdi-layer-card{border:1px solid #d9e7dc;border-radius:12px;background:white;padding:11px;margin:8px 0}.gdi-browser .gdi-layer-card strong{display:block;font-size:12px;color:#264b39;overflow-wrap:anywhere}.gdi-browser .gdi-layer-card small{display:block;color:#6c7d72;font-size:11px;margin:5px 0;line-height:1.4}.gdi-browser .gdi-layer-card button{margin-top:7px;background:#245744;color:white;border-color:#245744}.gdi-browser .gdi-layer-filter{box-sizing:border-box;width:100%;border-radius:10px;border:1px solid #cdded0;padding:10px;margin:9px 0;font-size:13px}.gdi-browser .gdi-extra{border-top:1px solid #e1ebe4;margin-top:12px;padding-top:11px}.gdi-browser .gdi-extra a{color:#246345;font-size:12px}.gdi-browser .gdi-more{width:100%;margin:9px 0}.gdi-browser .gdi-hint{font-size:11px;color:#65786a;line-height:1.5}.gdi-browser .gdi-tag{font-size:10px;color:#577562}.gdi-browser .gdi-icon{font-size:19px;width:21px;flex:none}@media(max-width:470px){.gdi-browser .gdi-palette{grid-template-columns:1fr}.gdi-browser .gdi-palette>button{padding:11px 9px;min-height:64px;font-size:11px}.gdi-browser .gdi-icon{display:none}}";
  document.head.appendChild(styles);
  const root=node("section",null,"gdi-browser");
- const note=node("p","Nur Fachkarten. Wähle ein Thema, dann eine Kartenebene. Erst ansehen, danach auf der Karte speichern.","gdi-browser-description");
+
  const form=node("form",null,"gdi-browser-search");
  const input=node("input");input.type="search";input.placeholder="Fachkarte suchen …";input.maxLength=90;input.setAttribute("aria-label","Berliner Fachkarte suchen");
  const searchButton=node("button","Suchen","gdi-action");searchButton.type="submit";
@@ -208,14 +195,14 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Berliner WMS-Adresse einfügen";urlInput.setAttribute("aria-label","Offizielle Berliner WMS-URL");
  const urlButton=node("button","Öffnen");urlButton.type="submit";urlForm.append(urlInput,urlButton);
  extras.appendChild(node("p","Du hast bereits einen WMS-Link? Öffne hier seine Kartenebenen.","gdi-hint"),urlForm);
- root.append(note,form,crumbs,header,palette,status,results,extras);parent.appendChild(root);
+ root.append(form,crumbs,header,palette,status,results,extras);parent.appendChild(root);
  let stack=[{level:"root",title:"Fachkarten"}], requestId=0,searchPosition=1,selectedQuery="",serviceSeen=new Set(),resultsCount=0;
  const present=()=>stack[stack.length-1];
  const addButton=(label,action,description,icon)=>{
   const b=node("button");b.type="button";
   if(icon)b.appendChild(node("span",icon,"gdi-icon"));
   const span=node("span");span.textContent=label;
-  if(description)span.appendChild(node("small",description,"gdi-mini"));
+
   b.append(span,node("span","›","gdi-arrow"));b.addEventListener("click",action);palette.appendChild(b);
   return b;
  };
@@ -231,13 +218,8 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   back.hidden=stack.length===1;
   if(view.level==="root"){
    for(const topic of TOPICS){
-    addButton(topic.label,()=>push({level:"topics",title:topic.label,topic}),null,topic.icon);
-   }
-  }else if(view.level==="topics"){
-   for(const [label,query,preset] of view.topic.sub){
-    addButton(label,()=>push({level:"services",title:label,query,preset}),"Fachkarten durchsuchen");
-   }
-  }else if(view.level==="services"){
+    addButton(topic.label,()=>push({level:"services",title:topic.label,category:topic.code,query:"",preset:[]}));
+   }}else if(view.level==="services"){
    searchPosition=1;selectedQuery=view.query;serviceSeen=new Set();resultsCount=0;
    setStatus("Kartendienste werden ermittelt …");
    for(const id of view.preset||[]){
@@ -254,14 +236,14 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   serviceSeen.add(item.url);resultsCount++;
   addButton(item.title||"Berliner Fachkarte",()=>{
    push({level:"layers",title:item.title||"Kartenebenen",service:item});
-  },(item.description||"").slice(0,90)||item.url);
+  });
  }
  async function loadMoreServices(view){
   if(present()!==view)return;
   const id=++requestId,start=searchPosition;
   setStatus("Suche im Berliner Fachkartenkatalog …");
   try{
-   const page=await searchCSW(view.query,start);
+   const page=await searchCSW(view.query,start,{category:view.category});
    if(id!==requestId||present()!==view)return;
    searchPosition+=30;
    for(const item of page.results)showService(item);
@@ -304,8 +286,8 @@ function mount({parent,maps,preview,capabilities,services=[]}){
      for(const layer of match.slice(body.querySelectorAll(".gdi-layer-card").length,visible)){
       const row=node("div",null,"gdi-layer-card");
       const heading=node("strong",layer.title||layer.name);
-      const subtitle=node("small",(layer.abstract||"").slice(0,180));
-      const identifier=node("small","Ebene: "+layer.name,"gdi-tag");
+
+       const layerMetadata=metadataDetails("Metadaten",layerFields(layer,view.service),view.service.metadataXml||"","geoportal-metadaten.xml");
       const button=node("button","Auf Karte legen");button.type="button";
       button.addEventListener("click",()=>{
        const name=layers.length===1?view.service.title:view.service.title+" · "+(layer.title||layer.name);
@@ -315,7 +297,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
          provider:"Geoportal Berlin / Land Berlin"};
        try{preview(item);}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
       });
-      row.append(heading,subtitle,identifier,button);
+      row.append(heading,button,layerMetadata);
       fragment.append(row);
      }
      body.querySelector(".gdi-more")?.remove();
