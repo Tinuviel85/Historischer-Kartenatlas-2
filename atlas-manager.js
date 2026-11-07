@@ -137,6 +137,7 @@
     var css = node("style");
     css.textContent = ".manager-launch{width:100%;margin:10px 0 0;border:1px solid #b6cfbe;background:#eaf3ec;color:#214c3f;border-radius:10px;padding:10px;font-weight:750;font-size:12px;text-align:center}.manager-launch:hover{background:#dcecdf}.manager-edit{background:#f4f8f3;border:1px solid #dce6dd;color:#466b55;border-radius:8px;padding:5px 7px;font-size:13px}.manager-edit:hover{background:#dfebdd}.manager-modal{border:1px solid #dbe5db;border-radius:17px;padding:0;width:min(640px,calc(100% - 18px));max-height:90dvh;box-shadow:0 20px 90px #132d2b55;color:#284438;background:white}.manager-modal::backdrop{background:#11291f91}.manager-inner{padding:22px;max-height:87dvh;overflow:auto}.manager-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.manager-head h2{font:700 22px Georgia,serif;margin:0}.manager-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 15px}.manager-tab{border:1px solid #d9e3d9;background:#f8faf6;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:700;color:#375b4c}.manager-tab[aria-selected=true]{background:#245044;color:white}.manager-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.manager-fields label,.manager-label{display:block;font-size:12px;font-weight:700;color:#435a4b}.manager-fields input,.manager-fields select,.manager-search{width:100%;margin-top:5px;padding:11px 10px;border:1px solid #d1ddce;border-radius:9px;background:white;color:#20382c;font-size:14px}.manager-wide{grid-column:1/-1}.manager-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:15px}.manager-action{padding:10px 13px;border:1px solid #b8ccbf;background:#fff;color:#26483c;border-radius:9px;font-size:13px;font-weight:700}.manager-primary{background:#214d3e;color:white;border-color:#214d3e}.manager-danger{color:#933e34;border-color:#ecd0cd}.manager-muted{font-size:12px;color:#6a7c70;line-height:1.5}.manager-results{display:grid;gap:9px;margin-top:12px;max-height:38dvh;overflow:auto}.manager-result{padding:12px;border:1px solid #d9e3d9;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}.manager-result strong{display:block;font-size:13px;overflow-wrap:anywhere}.manager-result small{display:block;color:#718075;margin-top:4px}.manager-region-row{flex-wrap:wrap}.manager-region-actions{display:flex;gap:7px;flex-wrap:wrap}.manager-region-confirm{width:100%;margin-top:7px;padding:11px;border:1px solid #eededb;border-radius:11px;background:#fffaf8}.manager-region-confirm p{margin:0 0 9px}.manager-region-target{display:block;width:100%;margin-top:7px;padding:10px;border:1px solid #d1ddce;border-radius:9px;background:white;font-size:14px}.manager-status{margin:9px 0;color:#4c6657;font-size:12px}.manager-hidden{display:none!important}@media(max-width:500px){.manager-fields{grid-template-columns:1fr}.manager-inner{padding:14px}.manager-head h2{font-size:19px}}";
     css.textContent += ".manager-provider{margin:9px 0;border:1px solid #d5e4d9;border-radius:12px;background:#fff;overflow:visible}.manager-provider>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:14px 15px;background:#f3f8f4;color:#264b3a;font-weight:800;font-size:14px;border-radius:11px}.manager-provider>summary::-webkit-details-marker{display:none}.manager-provider>summary:after{content:'⌄';font-size:20px;color:#527262;margin-left:10px;transform:rotate(0deg);transition:transform .2s}.manager-provider[open]>summary:after{transform:rotate(180deg)}.manager-provider[open]>summary{border-bottom:1px solid #dfe9e1;border-radius:11px 11px 0 0}.manager-provider>form,.manager-provider>section,.manager-provider>p,.manager-provider>.gdi-catalog{margin:12px!important}.manager-provider .manager-fields{padding:3px}.manager-provider #managerMap{margin:13px}.manager-provider>.gdi-catalog{border:0;padding:0;background:none}";
+    css.textContent += ".manager-editor-dialog{width:min(570px,calc(100% - 22px))}.manager-editor-dialog #managerMap{margin:0}.manager-editor-dialog .manager-editor-content{padding:2px 0}.manager-editor-dialog .manager-head{margin-bottom:17px}.manager-editor-dialog .manager-editor-subtitle{font-size:12px;color:#60796b;margin:-3px 0 13px;overflow-wrap:anywhere}.manager-editor-dialog #managerEditorClose{flex:none;min-width:44px;min-height:44px;border-radius:12px;background:#edf5ef;color:#264c3c;font-size:23px;display:grid;place-items:center}";
     css.textContent += ".manager-modal .manager-inner{position:relative;isolation:isolate}.manager-modal .manager-head{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.98);padding:14px 2px;margin:0 0 12px;border-bottom:1px solid #e2ebe3;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}.manager-modal #managerClose{flex:none;display:grid;place-items:center;min-width:44px;min-height:44px;border-radius:12px;background:#edf5ef;color:#264c3c;font-size:23px;padding:6px}.manager-modal #managerClose:focus-visible{outline:3px solid #2c7153}.manager-modal .manager-tabs{position:static;background:rgba(255,255,255,.97);padding:4px 0 10px;border-bottom:1px solid #e5ece5}@media(max-width:500px){.manager-modal .manager-head{top:0;padding:13px 0;margin:0 0 9px}}";
     document.head.appendChild(css);
     var launcher = node("button", "manager-launch", "+ Karten entdecken und verwalten");
@@ -164,7 +165,29 @@
     manualSection.classList.remove("manager-hidden");
     manualPanel.appendChild(manualSection);
     discover.appendChild(manualPanel);
+    // Der Stift einer bereits gespeicherten Karte oeffnet einen eigenen
+    // Dialog. Das existierende Formular wird verschoben statt dupliziert:
+    // dadurch bleiben IDs, Eingabevalidierung und Speicherlogik eindeutig.
+    const editorDialog=node("dialog","manager-modal manager-editor-dialog");
+    editorDialog.id="managerEditorDialog";
+    editorDialog.innerHTML='<div class="manager-inner"><div class="manager-head"><h2>Karte bearbeiten</h2><button id="managerEditorClose" class="manager-action" type="button" aria-label="Kartenbearbeitung schließen">✕</button></div><p id="managerEditorSubtitle" class="manager-editor-subtitle"></p><div id="managerEditorContent" class="manager-editor-content"></div></div>';
+    document.body.appendChild(editorDialog);
+    const editorSlot=el("managerEditorContent");
+    function restoreManualForm(){
+      if(manualSection.parentElement!==manualPanel)manualPanel.appendChild(manualSection);
+    }
+    function closeMapEditor(){
+      if(editorDialog.open)editorDialog.close();
+      else restoreManualForm();
+    }
+    editorDialog.addEventListener("close",function(){
+      restoreManualForm();
+      editing=null;
+      updateManualSubmit();
+    });
+    el("managerEditorClose").addEventListener("click",closeMapEditor);
     function open(tab) {
+      restoreManualForm();
       const target=tab==="map"?"discover":(tab||"discover");
       switchTab(target);
       if(tab==="map"){manualPanel.open=true;populateRegions();}
@@ -208,10 +231,12 @@
     }
     function editMap(id) {
       var m = maps[id]; if (!m || m.hidden) return;
+      if(dialog.open)dialog.close();
       editing = id;
-      updateManualSubmit();
-      open("map");
+      editorSlot.appendChild(manualSection);
+      el("managerEditorSubtitle").textContent=m.name||"Gespeicherte Karte";
       populateRegions();
+      updateManualSubmit();
       el("mgrName").value = m.name || "";
       el("mgrYear").value = m.year || "";
       el("mgrRegion").value = m.region;
@@ -222,10 +247,13 @@
       el("mgrDetails").value = m.detailUrl || "";
       el("mgrDelete").classList.remove("manager-hidden");
       toggleLayer();
+      if(!editorDialog.open)editorDialog.showModal();
+      editorDialog.querySelector(".manager-inner").scrollTop=0;
+      el("mgrName").focus({preventScroll:true});
     }
     function toggleLayer() { el("mgrLayerWrap").classList.toggle("manager-hidden", el("mgrType").value !== "wms"); }
     el("mgrType").addEventListener("change", toggleLayer);
-    el("mgrCancelEdit").addEventListener("click", beginNewMap);
+    el("mgrCancelEdit").addEventListener("click",function(){if(editing!==null)closeMapEditor();else beginNewMap();});
     function mapExists(item, exceptId) {
       return maps.some(function (m) {return m && !m.hidden && m.id !== exceptId && m.sourceUrl === item.sourceUrl && (m.layerName || "") === (item.layerName || "");});
     }
@@ -310,11 +338,13 @@
           type:el("mgrType").value,sourceUrl:el("mgrUrl").value,layerName:el("mgrLayer").value,
           provider:el("mgrProvider").value,detailUrl:el("mgrDetails").value
         };
+        if(editing!==null&&maps[editing]?.sourceUrl===proposed.sourceUrl)
+          proposed.bounds=maps[editing].bounds||null;
         if(editing===null){
           previewDiscoveredMap(proposed);
         }else{
           upsert(proposed,editing);
-          dialog.close();api.setNotice("Änderungen gespeichert.");
+          closeMapEditor();api.setNotice("Änderungen gespeichert.");
         }
       } catch (e) { api.setNotice(e.message, 6000); window.alert(e.message); }
     });
@@ -327,7 +357,7 @@
         var next = maps.find(function (m) {return m && !m.hidden;});
         if (next) api.selectMap(next.id);
       }
-      persist(); redraw(); dialog.close(); api.setNotice("Karte aus Bibliothek entfernt.");
+      persist(); redraw(); closeMapEditor(); dialog.close(); api.setNotice("Karte aus Bibliothek entfernt.");
     }
     el("mgrDelete").addEventListener("click", function () { if (editing !== null) removeMap(editing); });
     async function lookupLocation(q) {
