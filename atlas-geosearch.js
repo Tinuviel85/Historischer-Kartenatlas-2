@@ -517,10 +517,50 @@ function mount({parent,maps,preview,capabilities,services=[]}){
    return parse(await response.text());
   }finally{clearTimeout(timeout);}
  }
+
+ function showBavariaWmts(view){
+  const svc=view.service,body=node("div");
+  results.replaceChildren();
+  for(const layer of svc.layers){
+   const row=node("div",null,"gdi-layer-card");
+   const heading=node("strong",layer.title);
+   const button=node("button","Auf Karte legen");button.type="button";
+   const tileUrl="https://wmtsod5.bayernwolke.de/wmts/"+
+     layer.name+"/smerc/{z}/{x}/{y}."+layer.ext;
+   button.addEventListener("click",()=>{
+    const item={
+     name:layer.title,year:null,region:"Bayern",
+     sourceUrl:tileUrl,type:"xyz",layerName:"",
+     bounds:BAVARIA_CENTER,
+     detailUrl:"https://geodatenonline.bayern.de/geodatenonline/seiten/wmts_ba",
+     provider:"Bayerische Vermessungsverwaltung (LDBV)"
+    };
+    try{preview(item)}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message)}
+   });
+   const detail=metadataDetails("Metadaten",[
+    {name:"Kartenebene",value:layer.title},
+    {name:"Amtliche WMTS-Layer-ID",value:layer.name},
+    {name:"Kachelmatrix",value:"smerc (EPSG:3857)"},
+    {name:"Original-GetCapabilities",value:BAYERN_WMTS},
+    {name:"Quelle",value:"Bayerische Vermessungsverwaltung"}
+   ],"","");
+   row.append(heading,button,detail);body.appendChild(row);
+  }
+  results.appendChild(body);
+  setStatus(svc.layers.length+" amtliche WMTS-Kartenebenen. Die Kachel-URLs sind bereits für EPSG:3857 vorbereitet.");
+ }
  async function loadLayers(view){
+  if(view.service.type==="wmts"){showBavariaWmts(view);return;}
   const id=++requestId;
   try{
-   const info=await getServiceCapabilities(view.service.url,view.state);
+   let info;
+   try{info=await getServiceCapabilities(view.service.url,view.state);}
+   catch(e){
+    if(!view.service.fallbackLayers?.length)throw e;
+    // Der Layername ist fuer DTK500 amtlich dokumentiert; keine erfundenen Namen.
+    info={leaves:view.service.fallbackLayers};
+    setStatus("Dienstkatalog im Browser nicht erreichbar; amtlich dokumentierte Ebene wird angezeigt.");
+   }
    if(id!==requestId||present()!==view)return;
    const available=(info.leaves||[]).filter(l=>l.name&&!isBackground(l)&&!isIndexed(l));
    const svc=view.state?.code==="BE"?services.find(s=>"https://gdi.berlin.de/services/wms/"+s.slug===view.service.url):null;
