@@ -89,6 +89,21 @@
     // Keine automatisch installierten Karten. Auch der Baumbestand wird
     // ausschliesslich ueber die Fachkartensuche auf Wunsch hinzugefuegt.
 
+    // Bounding boxes: geographische Koordinaten in der Form
+    // [[sued,west],[nord,ost]]; MapWarper liefert lon,lat,lon,lat.
+    function normalizeMapBounds(raw){
+      var p=null;
+      if(Array.isArray(raw)&&raw.length===2&&Array.isArray(raw[0])&&Array.isArray(raw[1]))
+        p=[Number(raw[0][0]),Number(raw[0][1]),Number(raw[1][0]),Number(raw[1][1])];
+      else if(typeof raw==="string"){
+        var a=raw.split(",").map(Number);
+        if(a.length===4)p=[a[1],a[0],a[3],a[2]];
+      }
+      if(!p||!p.every(Number.isFinite))return null;
+      var [south,west,north,east]=p;
+      if(south>=north||west>=east||south< -90||north>90||west< -180||east>180)return null;
+      return [[south,west],[north,east]];
+    }
     function sanitizeMap(v) {
       var type = v.type === "geoportal" ? "geoportal" : v.type === "histomap" ? "histomap" : v.type === "wms" ? "wms" : v.type === "wmts" ? "wmts" : v.type === "tms" ? "tms" : "xyz";
       var name = String(v.name || "").trim().slice(0, 220);
@@ -99,7 +114,8 @@
         sourceUrl: url,
         detailUrl: safeHttp(v.detailUrl) || url,
         provider: String(v.provider || "Eigene Karte").slice(0, 140),
-        type: type, layerName: String(v.layerName || "").trim().slice(0, 250)
+        type: type, layerName: String(v.layerName || "").trim().slice(0, 250),
+        bounds: normalizeMapBounds(v.bounds||v.bbox)
       };
     }
     function persist() {
@@ -109,7 +125,7 @@
         deletedRegions: deletedRegions,
         geoportalOverlays: [], // Legacy overlay mode intentionally disabled.
         custom: maps.slice(defaultCount).map(function (m) {
-          return {name:m.name,region:m.region,year:m.year,sourceUrl:m.sourceUrl,detailUrl:m.detailUrl,provider:m.provider,type:m.type,layerName:m.layerName};
+          return {name:m.name,region:m.region,year:m.year,sourceUrl:m.sourceUrl,detailUrl:m.detailUrl,provider:m.provider,type:m.type,layerName:m.layerName,bounds:m.bounds||null};
         }),
         overrides: overrides,
         hidden: maps.filter(function (m) {return m.hidden;}).map(function (m) {return m.id;})
@@ -498,7 +514,7 @@
           if (!url||!["{z}","{x}","{y}"].every(function(v){return url.includes(v);})) return;
           var name=String(a.title||"Historische Karte").slice(0,220);
           var match=String(a.date_depicted||a.issue_year||name).match(/(?:1[0-9]{3}|20[0-9]{2})/);
-          appendSuggestion({name:name,year:match?Number(match[0]):null,region:query,sourceUrl:url,detailUrl:"https://mapwarper.net/maps/"+encodeURIComponent(record.id),provider:"MapWarper",type:"xyz"});
+          appendSuggestion({name:name,year:match?Number(match[0]):null,region:query,sourceUrl:url,detailUrl:"https://mapwarper.net/maps/"+encodeURIComponent(record.id),provider:"MapWarper",type:"xyz",bbox:a.bbox||null});
           remote++;
         });
         status.textContent=count+" Kartenangebote insgesamt; "+remote+" MapWarper-Einträge ausgewertet (erste Ergebnisseite).";
