@@ -418,8 +418,8 @@
   <script src="atlas-cloud.js?v=20261105-alt-account"></script>
   <script src="atlas-histomap.js?v=20261106-allsheets"></script>
   <script src="atlas-geoportal.js?v=20261107-laender-csw-parser"></script>
-  <script src="atlas-geosearch.js?v=20261107-geoportal-laender-fachkarten2"></script>
-  <script src="atlas-manager.js?v=20261107-separate-map-editor"></script>
+  <script src="atlas-geosearch.js?v=20261107-bayern-native-real-layers3"></script>
+  <script src="atlas-manager.js?v=20261107-state-native-geobounds2"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -887,7 +887,7 @@
       }
       function focusMap(m, previous, restored=false){
         if(restored)return;
-        if(focusPreviewBounds(m.bounds))return;
+        if(focusPreviewBounds(m.previewBounds||m.bounds))return;
         const cfg=regionDefinitions[m.region];
         const current=map.getCenter();
         const moved=distanceKm([current.lat,current.lng],cfg.center);
@@ -955,7 +955,7 @@
             ? window.AtlasHistoMap.createFullYearLayer(L,m.year,(message)=>setNotice(message,5500),m.layerName)
             : m.type==='wms'
               ? L.tileLayer.wms(m.sourceUrl,{layers:m.layerName,format:'image/png',transparent:true,version:'1.1.1',minZoom:2,maxZoom:19,keepBuffer:3})
-              : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:'',keepBuffer:3,updateWhenIdle:true});
+              : L.tileLayer(m.sourceUrl,{minZoom:2,maxZoom:19,tms:m.type==='tms',attribution:/\.bayernwolke\.de\//i.test(m.sourceUrl)?'© Bayerische Vermessungsverwaltung (CC BY 4.0)':'',keepBuffer:3,updateWhenIdle:true});
       }
       // Der Entdeckungsdialog bleibt mitsamt Suchergebnissen, geöffneten
       // Anbietern und Scrollposition im DOM erhalten.
@@ -1110,7 +1110,7 @@
           provider:item.provider||'Kartenanbieter',layerName:item.layerName||'auto'};
         const serial=++previewLocationSerial;
         try{
-          const jumped=focusPreviewBounds(m.bounds);
+          const jumped=focusPreviewBounds(m.previewBounds||m.bounds);
           syncHistorical();
           preview={item:{...item},layer:createDisplayLayer(m)};
           preview.layer.addTo(historicalMap);
