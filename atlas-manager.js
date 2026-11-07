@@ -115,7 +115,8 @@
         detailUrl: safeHttp(v.detailUrl) || url,
         provider: String(v.provider || "Eigene Karte").slice(0, 140),
         type: type, layerName: String(v.layerName || "").trim().slice(0, 250),
-        bounds: normalizeMapBounds(v.bounds||v.bbox)
+        bounds: normalizeMapBounds(v.bounds||v.bbox),
+        previewBounds: normalizeMapBounds(v.previewBounds)
       };
     }
     function persist() {
@@ -125,7 +126,7 @@
         deletedRegions: deletedRegions,
         geoportalOverlays: [], // Legacy overlay mode intentionally disabled.
         custom: maps.slice(defaultCount).map(function (m) {
-          return {name:m.name,region:m.region,year:m.year,sourceUrl:m.sourceUrl,detailUrl:m.detailUrl,provider:m.provider,type:m.type,layerName:m.layerName,bounds:m.bounds||null};
+          return {name:m.name,region:m.region,year:m.year,sourceUrl:m.sourceUrl,detailUrl:m.detailUrl,provider:m.provider,type:m.type,layerName:m.layerName,bounds:m.bounds||null,previewBounds:m.previewBounds||null};
         }),
         overrides: overrides,
         hidden: maps.filter(function (m) {return m.hidden;}).map(function (m) {return m.id;})
