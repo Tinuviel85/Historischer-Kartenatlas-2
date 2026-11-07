@@ -248,7 +248,14 @@
     }
     async function saveDiscoveredMap(item){
       var clean=normalizePreview(item);
-      if(!defs[clean.region])await ensureRegion(clean.region);
+      if(!defs[clean.region]){
+        const bounds=normalizeMapBounds(clean.bounds);
+        if(bounds){
+          const centerLat=(bounds[0][0]+bounds[1][0])/2;
+          const centerLon=(bounds[0][1]+bounds[1][1])/2;
+          saveRegion(clean.region,centerLat,centerLon,12);
+        }else await ensureRegion(clean.region);
+      }
       return upsert(clean,null,true);
     }
     function upsert(item, id, keepView=false) {
