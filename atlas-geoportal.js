@@ -177,7 +177,8 @@ function createLayer(L,url,onError,options={}){
    _draw:function(v){
     if(v!==this._version||!this._map)return;
     const map=this._map,stage=this._stage;
-    const isPlan=/straubeplan/i.test(url);
+    const isPlan=/straubeplan|luftbild_19[0-9]{2}/i.test(url);
+    // Alte Einzelblattserien benoetigen bevorzugt transparente PNG-Kacheln.
     const choices=isPlan
       ?[{format:"image/png",crs:L.CRS.EPSG3857,transparent:true},
         {format:"image/jpeg",crs:L.CRS.EPSG3857,transparent:false},
