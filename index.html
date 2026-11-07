@@ -522,14 +522,16 @@
           try{localFavorites=JSON.parse(localStorage.getItem('historischer-atlas-favoriten')||'[]');}
           catch(_){/* Ungueltige Favoritenliste darf die Migration nicht abbrechen. */}
           const favorites=remap(Array.isArray(localFavorites)?localFavorites:data.favorites);
-          const shared=new URLSearchParams(location.hash.replace(/^#/,''));
-          if(shared.has('karte')){
-            const oldId=Number(shared.get('karte'));
-            if(newIds.has(oldId))shared.set('karte',String(newIds.get(oldId)));
-            else shared.delete('karte');
-            history.replaceState(history.state,'',location.pathname+location.search+
-              (shared.toString()?'#'+shared.toString():''));
-          }
+          try{
+            const shared=new URLSearchParams(location.hash.replace(/^#/,''));
+            if(shared.has('karte')){
+              const oldId=Number(shared.get('karte'));
+              if(newIds.has(oldId))shared.set('karte',String(newIds.get(oldId)));
+              else shared.delete('karte');
+              history.replaceState(history.state,'',location.pathname+location.search+
+                (shared.toString()?'#'+shared.toString():''));
+            }
+          }catch(_){/* Ein alter Freigabelink darf die Bibliotheksmigration nicht blockieren. */}
           data.custom=retained;
           data.hidden=remap(data.hidden);
           data.favorites=favorites;
