@@ -31,12 +31,12 @@ const stateFor=code=>STATES.find(s=>s.code===code)||STATES[2];
 // bewusst KEINE angeblich identische 16er-ISO-Navigationsstruktur.
 // Direkte Dienste werden nur nach amtlich dokumentierter URL hinterlegt.
 const LAND_NAV={
- BW:{entry:"Themenkarten",groups:["Umwelt und Energie","Schutzgebiete","Landentwicklung"],portal:"https://www.geoportal-bw.de/themenkarten"},
- BB:{entry:"Themenkarten",groups:["Schmettausches Kartenwerk","Liegenschaftskataster","Bodendenkmale","Geologische Karten","Bebauungspläne","Schutzgebiete","Gewässernetz","Biotopkartierung","Starkregengefahren"],portal:"https://geoportal.brandenburg.de/de/cms/portal/geodaten/themenkarten"},
+ BW:{entry:"Themenkarten",groups:[{label:"Umwelt und Energie",children:[{label:"Schutzgebiete",children:[{label:"Naturschutzgebiete Baden-Württemberg",query:"Naturschutzgebiete"}]}]}],portal:"https://www.geoportal-bw.de/themenkarten"},
+ BB:{entry:"Themenkarten",groups:["Liegenschaftskataster","Bodendenkmale","Geologische Karten","Schmettausches Kartenwerk","Wärmebelastungsindex","Bodenrichtwerte 2026","Schutzgebiete","Gewässernetz","Klassifiziertes Straßennetz","Baustelleninformationen","Bebauungspläne","Biotopkartierung","Starkregengefahren","Verkehrsstärkedaten","Rettungsdienste"],portal:"https://geoportal.brandenburg.de/de/cms/portal/geodaten/themenkarten"},
  HB:{entry:"Fachdaten",groups:[],portal:"https://www.geo.bremen.de/online-dienste/geoportal-bremen-14419"},
  HH:{entry:"Themen hinzufügen",groups:[],portal:"https://geoportal-hamburg.de/"},
  HE:{entry:"Themen",groups:["Historische Luftbilder","Liegenschaftskarte Hessen","Überschwemmungsgebiete Hessen","Bodenrichtwerte"],portal:"https://www.geoportal.hessen.de/"},
- MV:{entry:"Themenkarten",groups:["Flurstücke (ALKIS)","Bodenrichtwerte","Grundsteuer","Luftbilder (Digitale Orthophotos)","Schutzgebiete","Forstwirtschaft","Landwirtschaft"],portal:"https://www.geoportal-mv.de/portal/"},
+ MV:{entry:"Themenkarten",groups:["Flurstücke (ALKIS)","Bodenrichtwerte","Grundsteuer","Karten","Luftbilder (Digitale Orthophotos)","Schutzgebiete","Forstwirtschaft","Landwirtschaft"],portal:"https://www.geoportal-mv.de/portal/"},
  NI:{entry:"Geodatensuche",groups:[],portal:"https://www.geodaten.niedersachsen.de/"},
  NW:{entry:"Kartensuche",groups:[],portal:"https://www.geoportal.nrw/"},
  RP:{entry:"Kategorien und Themen",groups:["Liegenschaften RP"],portal:"https://www.geoportal.rlp.de/"},
@@ -364,7 +364,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  const bayernServicesLink=node("a","Amtliches Dienstverzeichnis Bayern");
  bayernServicesLink.href="https://geoportal.bayern.de/geoportalbayern/seiten/dienste";
  bayernServicesLink.target="_blank";bayernServicesLink.rel="noopener noreferrer";
- bayernServicesLink.style.cssText="display:block;margin-top:8px";
+ bayernServicesLink.style.marginTop="8px";
  extras.appendChild(bayernServicesLink);
  const urlForm=node("form",null,"gdi-browser-search");
  const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Amtliche WMS-Adresse einfügen";urlInput.setAttribute("aria-label","WMS-Dienstadresse");
@@ -428,9 +428,14 @@ function mount({parent,maps,preview,capabilities,services=[]}){
     addButton(theme,()=>push({level:"native-services",title:theme,state:view.state,theme}));
   }else if(view.level==="native-topics"){
    const nav=LAND_NAV[view.state.code];
-   if(nav?.groups?.length){
-    for(const topic of nav.groups)
-     addButton(topic,()=>push({level:"services",title:topic,state:view.state,query:topic,preset:[]}));
+   const entries=view.entries||nav?.groups||[];
+   if(entries.length){
+    for(const topic of entries){
+     const item=typeof topic==="string"?{label:topic,query:topic}:topic;
+     addButton(item.label,()=>item.children?.length?
+      push({level:"native-topics",title:item.label,state:view.state,entries:item.children}):
+      push({level:"services",title:item.label,state:view.state,query:item.query||item.label,preset:[]}));
+    }
    }else setStatus("Dieses Landesportal hat keinen einheitlich dokumentierten Fachkarten-Themenbaum. Die Original-Kartensuche ist unten verlinkt.");
    addButton("Alle amtlichen Kartendienste suchen",()=>push({
     level:"services",title:"Kartendienstsuche",state:view.state,query:"",preset:[]
