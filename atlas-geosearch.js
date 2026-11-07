@@ -4,86 +4,6 @@
 "use strict";
 const CSW="https://gdi.berlin.de/geonetwork/srv/ger/csw";
 const BASE="https://gdi.berlin.de/services/wms/";
-const FEDERAL_CSW="https://gdk.gdi-de.org/gdi-de/srv/ger/csw";
-// Grobe Suchfenster fuer raeumliche Katalogabfragen, keine Landesgrenzen.
-// Die bundesweite Quelle ist der amtliche Geodatenkatalog.de (GDI-DE).
-const STATES=[
- {name:"Baden-Württemberg",code:"BW",box:[7.4,47.5,10.6,49.85],portal:"https://www.geoportal-bw.de/"},
- {name:"Bayern",code:"BY",box:[8.85,47.15,13.95,50.6],portal:"https://geoportal.bayern.de/geoportalbayern/"},
- {name:"Berlin",code:"BE",box:[13.07,52.32,13.8,52.69],portal:"https://gdi.berlin.de/"},
- {name:"Brandenburg",code:"BB",box:[11.2,51.28,14.85,53.58],portal:"https://geoportal.brandenburg.de/"},
- {name:"Bremen",code:"HB",box:[8.4,52.98,9.04,53.66],portal:"https://geoportal.bremen.de/"},
- {name:"Hamburg",code:"HH",box:[9.65,53.36,10.38,53.76],portal:"https://geoportal-hamburg.de/"},
- {name:"Hessen",code:"HE",box:[7.7,49.28,10.28,51.73],portal:"https://www.geoportal.hessen.de/"},
- {name:"Mecklenburg-Vorpommern",code:"MV",box:[10.55,53,14.48,54.78],portal:"https://www.geoportal-mv.de/portal/"},
- {name:"Niedersachsen",code:"NI",box:[6.55,51.28,11.75,53.96],portal:"https://www.geodaten.niedersachsen.de/"},
- {name:"Nordrhein-Westfalen",code:"NW",box:[5.85,50.29,9.49,52.56],portal:"https://www.geoportal.nrw/"},
- {name:"Rheinland-Pfalz",code:"RP",box:[6.09,48.9,8.52,50.95],portal:"https://www.geoportal.rlp.de/"},
- {name:"Saarland",code:"SL",box:[6.32,49.1,7.46,49.68],portal:"https://geoportal.saarland.de/"},
- {name:"Sachsen",code:"SN",box:[11.83,50.16,15.08,51.71],portal:"https://geoportal.sachsen.de/"},
- {name:"Sachsen-Anhalt",code:"ST",box:[10.48,50.9,13.23,53.06],portal:"https://www.lvermgeo.sachsen-anhalt.de/"},
- {name:"Schleswig-Holstein",code:"SH",box:[7.75,53.35,11.38,55.1],portal:"https://www.gdi-sh.de/"},
- {name:"Thüringen",code:"TH",box:[9.8,50.16,12.78,51.73],portal:"https://www.geoportal-th.de/"}
-];
-const stateFor=code=>STATES.find(s=>s.code===code)||STATES[2];
-// Die Laender fuehren unterschiedliche, eigenstaendige Kartenmenues.
-// Diese Namen sind aus den offiziellen Landesportalen entnommen und sind
-// bewusst KEINE angeblich identische 16er-ISO-Navigationsstruktur.
-// Direkte Dienste werden nur nach amtlich dokumentierter URL hinterlegt.
-const LAND_NAV={
- BW:{entry:"Themenkarten",groups:[{label:"Umwelt und Energie",children:[{label:"Schutzgebiete",children:[{label:"Naturschutzgebiete Baden-Württemberg",query:"Naturschutzgebiete"}]}]}],portal:"https://www.geoportal-bw.de/themenkarten"},
- BB:{entry:"Themenkarten",groups:["Liegenschaftskataster","Bodendenkmale","Geologische Karten","Schmettausches Kartenwerk","Wärmebelastungsindex","Bodenrichtwerte 2026","Schutzgebiete","Gewässernetz","Klassifiziertes Straßennetz","Baustelleninformationen","Bebauungspläne","Biotopkartierung","Starkregengefahren","Verkehrsstärkedaten","Rettungsdienste"],portal:"https://geoportal.brandenburg.de/de/cms/portal/geodaten/themenkarten"},
- HB:{entry:"Fachdaten",groups:[],portal:"https://www.geo.bremen.de/online-dienste/geoportal-bremen-14419"},
- HH:{entry:"Themen hinzufügen",groups:[],portal:"https://geoportal-hamburg.de/"},
- HE:{entry:"Themen",groups:["Historische Luftbilder","Liegenschaftskarte Hessen","Überschwemmungsgebiete Hessen","Bodenrichtwerte"],portal:"https://www.geoportal.hessen.de/"},
- MV:{entry:"Themenkarten",groups:["Flurstücke (ALKIS)","Bodenrichtwerte","Grundsteuer","Karten","Luftbilder (Digitale Orthophotos)","Schutzgebiete","Forstwirtschaft","Landwirtschaft"],portal:"https://www.geoportal-mv.de/portal/"},
- NI:{entry:"Geodatensuche",groups:[],portal:"https://www.geodaten.niedersachsen.de/"},
- NW:{entry:"Kartensuche",groups:[],portal:"https://www.geoportal.nrw/"},
- RP:{entry:"Kategorien und Themen",groups:["Liegenschaften RP"],portal:"https://www.geoportal.rlp.de/"},
- SL:{entry:"Geodatensuche",groups:[],portal:"https://geoportal.saarland.de/"},
- SN:{entry:"Themen hinzuladen",groups:[],portal:"https://geoportal.sachsen.de/"},
- ST:{entry:"Open Data",groups:["Karten und Luftbilder","Landschafts- und Höhenmodelle","Kartographische Präsentationen / Themenkarten"],portal:"https://www.geodatenportal.sachsen-anhalt.de/"},
- SH:{entry:"Geodatensuche",groups:[],portal:"https://www.gdi-sh.de/"},
- TH:{entry:"Übersichtskarten",groups:["Thematische Übersichtskarten","Historische Katastersysteme"],portal:"https://geoportal.geoportal-th.de/gaialight-th/_apps/dladownload/dl-karten.html"}
-};
-const BAYERN_THEMES=[
- "Freizeit in Bayern","Geobasisdaten","Planen und Bauen",
- "Infrastruktur","Umwelt","Naturgefahren","Zeitreise",
- "Verwaltungsatlas","Energie","Heimat","Schulatlas","BayernAtlas-plus"
-];
-const BAYERN_WMTS="https://geoservices.bayern.de/od/wmts/geobasis/v1/1.0.0/WMTSCapabilities.xml";
-const BAYERN_MAPSERVICE={
- title:"Geobasisdaten Bayern (amtlicher WMTS)",
- url:BAYERN_WMTS,type:"wmts",license:"CC BY 4.0",
- layers:[
-  {title:"Topographische Karten Bayern",name:"by_amtl_karte",ext:"png"},
-  {title:"Luftbild Bayern",name:"by_dop",ext:"jpeg"},
-  {title:"Luftbild Colorinfrarot Bayern",name:"by_dop_cir",ext:"jpeg"},
-  {title:"Beschriftungen Bayern",name:"by_label",ext:"png"},
-  {title:"Webkarte Bayern",name:"by_webkarte",ext:"png"},
-  {title:"Webkarte Grau Bayern",name:"by_webkarte_grau",ext:"png"}
- ]
-};
-// Auszug bestaetigter offener Dienste von geoportal.bayern.de/geoportalbayern/seiten/dienste
-const BAYERN_SERVICES=[
- {title:"Historische Orthophotos (DOP) ab 2003",url:"https://geoservices.bayern.de/od/wms/histdop/v1/histdop",type:"historical-dop",theme:"Zeitreise"},
- {title:"Digitale Topographische Karte 1:500 000",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dtk500",theme:"Geobasisdaten",fallbackLayers:[{name:"by_dtk500",title:"Digitale Topographische Karte Bayern 1:500 000",crs:["EPSG:25832"]}]},
- {title:"Digitale Topographische Karte 1:25 000",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dtk25",theme:"Geobasisdaten"},
- {title:"Digitale Ortskarte Bayern",url:"https://geoservices.bayern.de/od/wms/dtk/v1/dok",theme:"Geobasisdaten"},
- {title:"Digitale Geologische Karte 1:25 000",url:"https://www.lfu.bayern.de/gdi/wms/geologie/dgk25",theme:"Umwelt"},
- {title:"Übersichtsbodenkarte 1:25 000",url:"https://www.lfu.bayern.de/gdi/wms/boden/uebk25",theme:"Umwelt"},
- {title:"Lärm an Hauptverkehrsstraßen",url:"https://www.lfu.bayern.de/gdi/wms/laerm/hauptverkehrsstrassen",theme:"Umwelt"},
- {title:"Lärm in Ballungsräumen",url:"https://www.lfu.bayern.de/gdi/wms/laerm/ballungsraeume",theme:"Umwelt"},
- {title:"Höhenlinien Bayern",url:"https://geoservices.bayern.de/od/wms/dgm/v1/hl",theme:"Geobasisdaten"},
- {title:"BAYSIS Verkehrsdaten",url:"https://gisportal-stmb.bayern.de/server/services/WMS/BAYSIS_Verkehrsdaten/MapServer/WMSServer",theme:"Infrastruktur"},
- {title:"Bebauungspläne Stadt München",url:"https://geoportal.muenchen.de/geoserver/plan/wms",theme:"Planen und Bauen"},
- {title:"Verwaltungsatlas Bayern – Verwaltungsgebiete",url:"https://gdiserv.bayern.de/srv1970/services/verwaltungsatlas_verwaltungsgrenzen_view-wms",theme:"Verwaltungsatlas"},
- {title:"Strukturkarte des Landesentwicklungsprogramms",url:"https://gdiserv.bayern.de/srv43522/services/strukturkarte-wms",theme:"Planen und Bauen"},
- {title:"Alpenplan",url:"https://gdiserv.bayern.de/srv1970/services/alpenplan-wms",theme:"Planen und Bauen"}
-];
-const BAVARIA_CENTER=[[48.06,11.40],[48.23,11.76]]; // Ausschnitt Muenchen fuer die Vorschau, keine Landes-BBOX
-
-
 const THEMES=["Alle","Luftbilder","Historische Karten","Verkehr","Baumbestand","Umweltatlas","Klima","Stadtplanung","Denkmäler","Gewässer"];
 function node(tag,text,cl){const e=document.createElement(tag);if(text!=null)e.textContent=String(text);if(cl)e.className=cl;return e;}
 function textElement(n,key){
@@ -130,113 +50,23 @@ function parseCSW(xml){
  }
  return {results:[...results.values()],matched};
 }
-
-// WMS-URL aus amtlichem Metadatensatz; niemals willkuerliche Webseiten
-// oder private IPs als Kartendienst behandeln.
-function normalizeCatalogWms(raw,verifiedProtocol=false){
- try{
-  let value=String(raw||"").trim().replaceAll("&amp;","&");
-  value=value.replace(/[),;.]+$/,"");
-  const u=new URL(value);
-  if(u.protocol!=="https:"&&u.protocol!=="http:")return null;
-  if(u.username||u.password)return null;
-  if(u.protocol==="http:")u.protocol="https:";
-  const host=u.hostname.toLowerCase();
-  if(host==="localhost"||host.endsWith(".local")||host==="gdk.gdi-de.org"||
-    host==="127.0.0.1"||host==="0.0.0.0"||host==="::1"||
-    /^(?:10|127|192\.168|169\.254)\./.test(host)||
-    /^172\.(?:1[6-9]|2\d|3[01])\./.test(host))return null;
-  if(!verifiedProtocol&&
-     !/(?:^|[\/_.-])(?:wms|ows)(?:$|[\/_.-])/i.test(u.pathname)&&
-     !/^(?:WMS)$/i.test(u.searchParams.get("service")||""))return null;
-  for(const key of [...u.searchParams.keys()]){
-   if(/^(?:service|request|version|layers|styles|format|transparent|bbox|width|height|srs|crs)$/i.test(key))
-    u.searchParams.delete(key);
-  }
-  u.hash="";
-  return u.href.replace(/\?$/,"");
- }catch(_){return null;}
-}
-function parseNationalCSW(xml){
- const doc=new DOMParser().parseFromString(xml,"application/xml");
- if(doc.getElementsByTagName("parsererror").length)throw Error("Ungültige Katalogantwort.");
- const root=Array.from(doc.getElementsByTagName("*")).find(e=>e.localName==="SearchResults");
- if(!root)throw Error("Der bundesweite Geodatenkatalog liefert keine gültige CSW-Trefferliste.");
- const matched=Number(root.getAttribute("numberOfRecordsMatched")||0);
- const records=Array.from(root.children).filter(x=>/Record|MD_Metadata/i.test(x.localName));
- const results=new Map();
- for(const record of records){
-  const title=textElement(record,"title")||"Amtlicher Kartendienst";
-  const description=textElement(record,"abstract")||textElement(record,"description")||"";
-  const elements=Array.from(record.getElementsByTagName("*"));
-  const urls=new Map();
-  for(const el of elements){
-   if(!["URL","linkage","OnlineResource","CI_OnlineResource"].includes(el.localName))continue;
-   let resource=el;
-   while(resource?.parentElement&&resource.localName!=="CI_OnlineResource")
-    resource=resource.parentElement;
-   const protocol=String(resource?.textContent||"");
-   const trustedWms=/OGC[:/ -]*WMS|WMS[:/ -]*1\.[013]/i.test(protocol);
-   const pieces=[el.textContent||"",...Array.from(el.attributes||[]).map(a=>a.value)];
-   for(const piece of pieces){
-    for(const match of String(piece).matchAll(/https?:\/\/[^\s"'<>]+/gi))
-     urls.set(match[0],trustedWms||urls.get(match[0])||false);
-   }
-  }
-  // Fuer Dienste, deren URI als einfacher ISO-Text beschrieben wird.
-  if(!urls.size){
-   for(const match of (record.textContent||"").matchAll(/https?:\/\/[^\s"'<>]+/gi))
-    urls.set(match[0],false);
-  }
-  const metadata=[];
-  for(const el of elements){
-   if(el.children.length)continue;
-   const value=(el.textContent||"").trim();
-   if(value&&value.length<12000)
-    metadata.push({name:(el.parentElement?.localName||"")+" · "+el.localName,value});
-  }
-  const metadataXml=new XMLSerializer().serializeToString(record);
-  for(const [raw,protocolIsWms] of urls){
-   const url=normalizeCatalogWms(raw,protocolIsWms);
-   if(url&&!results.has(url))
-    results.set(url,{title,description,url,metadata,metadataXml});
-  }
- }
- return {results:[...results.values()],matched};
-}
-function makeNationalConstraint(query,state,category,mode="bounds"){
- const topic=category?"TopicCategory = '"+String(category).replace(/[^A-Za-z]/g,"")+"'":null;
- const term=normalQuery(query);
- const bbox=state.box.join(",");
- const space=mode==="bounds"
-  ?"BBOX(ows:BoundingBox,"+bbox+")"
-  :"AnyText like '%"+state.name.replace(/[^A-Za-zÄÖÜäöüß -]/g,"")+"%'";
- return [topic,space,...(term?["AnyText like '%"+term+"%'"]:[])].filter(Boolean).join(" AND ");
-}
 async function searchCSW(query,start,options={}){
- const isFederal=!!options.state&&options.state.code!=="BE";
- const endpoint=isFederal?FEDERAL_CSW:CSW;
  const parameters=new URLSearchParams({
   SERVICE:"CSW",REQUEST:"GetRecords",VERSION:"2.0.2",
   resultType:"results",typeNames:"csw:Record",elementSetName:"full",
   outputSchema:"http://www.isotc211.org/2005/gmd",
   maxRecords:"30",startPosition:String(start),
   constraintLanguage:"CQL_TEXT",constraint_language_version:"1.1.0",
-  constraint:isFederal
-   ?makeNationalConstraint(query,options.state,options.category,options.mode||"bounds")
-   :options.category
-    ?"TopicCategory = '"+String(options.category).replace(/[^A-Za-z]/g,"")+"'"
-    :"AnyText like '%"+normalQuery(query)+"%'"
+  constraint: options.category
+    ? "TopicCategory = '"+String(options.category).replace(/[^A-Za-z]/g,"")+"'"
+    : "AnyText like '%"+normalQuery(query)+"%'"
  });
  const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),16000);
  try{
-  const response=await fetch(endpoint+"?"+parameters.toString(),{
-   mode:"cors",signal:ctl.signal,headers:{Accept:"application/xml,text/xml,*/*"}
-  });
+  const response=await fetch(CSW+"?"+parameters.toString(),{mode:"cors",signal:ctl.signal,
+   headers:{Accept:"application/xml,text/xml,*/*"}});
   if(!response.ok)throw Error("CSW HTTP "+response.status);
-  const xml=await response.text();
-  if(/<(?:(?:\w+):)?ExceptionReport\b/i.test(xml))throw Error("CSW-Suchfilter nicht unterstützt");
-  return isFederal?parseNationalCSW(xml):parseCSW(xml);
+  return parseCSW(await response.text());
  }finally{clearTimeout(timer);}
 }
 function safeLink(value){
@@ -346,7 +176,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  const root=node("section",null,"gdi-browser");
 
  const form=node("form",null,"gdi-browser-search");
- const input=node("input");input.type="search";input.placeholder="Fachkarte suchen …";input.maxLength=90;input.setAttribute("aria-label","Fachkarte im gewählten Bundesland suchen");
+ const input=node("input");input.type="search";input.placeholder="Fachkarte suchen …";input.maxLength=90;input.setAttribute("aria-label","Berliner Fachkarte suchen");
  const searchButton=node("button","Suchen","gdi-action");searchButton.type="submit";
  form.append(input,searchButton);
  const crumbs=node("div",null,"gdi-breadcrumb");
@@ -358,20 +188,15 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  const status=node("p",null,"gdi-status");
  const extras=node("div",null,"gdi-extra");
  const official=node("a","Amtliche Geodatensuche öffnen");
- official.href="https://www.geoportal.de/apps/land";
+ official.href="https://gdi.berlin.de/geonetwork/srv/ger/catalog.search";
  official.target="_blank";official.rel="noopener noreferrer";
  extras.appendChild(official);
- const bayernServicesLink=node("a","Amtliches Dienstverzeichnis Bayern");
- bayernServicesLink.href="https://geoportal.bayern.de/geoportalbayern/seiten/dienste";
- bayernServicesLink.target="_blank";bayernServicesLink.rel="noopener noreferrer";
- bayernServicesLink.style.marginTop="8px";
- extras.appendChild(bayernServicesLink);
  const urlForm=node("form",null,"gdi-browser-search");
- const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Amtliche WMS-Adresse einfügen";urlInput.setAttribute("aria-label","WMS-Dienstadresse");
+ const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Berliner WMS-Adresse einfügen";urlInput.setAttribute("aria-label","Offizielle Berliner WMS-URL");
  const urlButton=node("button","Öffnen");urlButton.type="submit";urlForm.append(urlInput,urlButton);
  extras.appendChild(node("p","Du hast bereits einen WMS-Link? Öffne hier seine Kartenebenen.","gdi-hint"),urlForm);
  root.append(form,crumbs,header,palette,status,results,extras);parent.appendChild(root);
- let stack=[{level:"root",title:"Geoportal"}], requestId=0,searchPosition=1,selectedQuery="",serviceSeen=new Set(),resultsCount=0;
+ let stack=[{level:"root",title:"Fachkarten"}], requestId=0,searchPosition=1,selectedQuery="",serviceSeen=new Set(),resultsCount=0;
  const present=()=>stack[stack.length-1];
  const addButton=(label,action,description,icon)=>{
   const b=node("button");b.type="button";
@@ -391,255 +216,58 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   crumbs.textContent=stack.map(s=>s.title).join(" › ");
   step.textContent=view.title;
   back.hidden=stack.length===1;
-  official.href=view.state?.code==="BY"&&view.level!=="state"
-   ?"https://geoportal.bayern.de/bayernatlas/":
-   (LAND_NAV[view.state?.code]?.portal||view.state?.portal||"https://www.geoportal.de/apps/land");
-  official.textContent=view.state?.code==="BY"&&view.level!=="state"?
-   "BayernAtlas im Original öffnen":
-   view.state?"Amtliches Geoportal "+view.state.name+" öffnen":"Geoportale der Bundesländer öffnen";
-  bayernServicesLink.hidden=view.state?.code!=="BY";
-  urlForm.hidden=!view.state;
   if(view.level==="root"){
-   for(const state of STATES)
-    addButton(state.name,()=>push({level:"state",title:state.name,state}));
-  }else if(view.level==="state"){
-   if(view.state.code==="BE"){
-    addButton("Fachkarten",()=>push({level:"topics",title:"Fachkarten",state:view.state}));
-   }else if(view.state.code==="BY"){
-    addButton("BayernAtlas · Themen",()=>push({level:"by-themes",title:"BayernAtlas",state:view.state}));
-    addButton("Amtliche Kartendienste",()=>push({level:"native-services",title:"Kartendienste Bayern",state:view.state,theme:""}));
-   }else{
-    const nav=LAND_NAV[view.state.code];
-    addButton(nav?.entry||"Kartendienste",()=>push({
-     level:"native-topics",title:nav?.entry||"Kartendienste",state:view.state
-    }));
-    addButton("Amtliche Kartendienste suchen",()=>push({
-     level:"services",title:"Kartendienstsuche",state:view.state,query:"",preset:[]
-    }));
-   }
-  }else if(view.level==="topics"){
-   for(const topic of TOPICS)
-    addButton(topic.label,()=>push({
-     level:"services",title:topic.label,state:view.state,
-     category:topic.code,query:"",preset:[]
-    }));
-  }else if(view.level==="by-themes"){
-   for(const theme of BAYERN_THEMES)
-    addButton(theme,()=>push({level:"native-services",title:theme,state:view.state,theme}));
-  }else if(view.level==="native-topics"){
-   const nav=LAND_NAV[view.state.code];
-   const entries=view.entries||nav?.groups||[];
-   if(entries.length){
-    for(const topic of entries){
-     const item=typeof topic==="string"?{label:topic,query:topic}:topic;
-     addButton(item.label,()=>item.children?.length?
-      push({level:"native-topics",title:item.label,state:view.state,entries:item.children}):
-      push({level:"services",title:item.label,state:view.state,query:item.query||item.label,preset:[]}));
-    }
-   }else setStatus("Dieses Landesportal hat keinen einheitlich dokumentierten Fachkarten-Themenbaum. Die Original-Kartensuche ist unten verlinkt.");
-   addButton("Alle amtlichen Kartendienste suchen",()=>push({
-    level:"services",title:"Kartendienstsuche",state:view.state,query:"",preset:[]
-   }));
-  }else if(view.level==="native-services"){
-   const found=[];
-   if(!view.theme||view.theme==="Geobasisdaten")found.push(BAYERN_MAPSERVICE);
-   for(const svc of BAYERN_SERVICES)
-    if(!view.theme||svc.theme===view.theme)found.push(svc);
-   for(const svc of found)showService(svc);
-   setStatus(found.length+" amtlich dokumentierte Kartendienste in diesem Themenbereich.");
-   if(!found.length)setStatus("Für dieses BayernAtlas-Thema sind noch keine direkt geprüften WMS-Adressen hinterlegt. Das Originalportal ist unten verlinkt.");
-   addButton("Weitere Dienste im amtlichen Katalog suchen",()=>push({
-    level:"services",title:"Weitere Geodienste",state:view.state,query:view.theme||"",preset:[]
-   }));
-  }else if(view.level==="services"){
+   for(const topic of TOPICS){
+    addButton(topic.label,()=>push({level:"services",title:topic.label,category:topic.code,query:"",preset:[]}));
+   }}else if(view.level==="services"){
    searchPosition=1;selectedQuery=view.query;serviceSeen=new Set();resultsCount=0;
-   setStatus("Amtliche Kartendienste werden ermittelt …");
-   if(view.state?.code==="BE"){
-    for(const id of view.preset||[]){
-     const svc=services.find(s=>s.id===id&&!s.indexOnly);
-     if(svc)showService({title:svc.title,
-      url:"https://gdi.berlin.de/services/wms/"+svc.slug,description:svc.note});
-    }
+   setStatus("Kartendienste werden ermittelt …");
+   for(const id of view.preset||[]){
+    const svc=services.find(s=>s.id===id&&!s.indexOnly);
+    if(svc)showService({title:svc.title,url:"https://gdi.berlin.de/services/wms/"+svc.slug,description:svc.note});
    }
    loadMoreServices(view);
   }else if(view.level==="layers"){
-   setStatus("Kartenebenen werden geladen …");
-   loadLayers(view);
+   setStatus("Kartenebenen werden geladen …");loadLayers(view);
   }
  }
  function showService(item){
   if(backgroundService(item)||serviceSeen.has(item.url))return;
   serviceSeen.add(item.url);resultsCount++;
-  addButton(item.title||"Amtlicher Kartendienst",()=>{
-   push({level:"layers",title:item.title||"Kartenebenen",service:item,state:present().state});
+  addButton(item.title||"Berliner Fachkarte",()=>{
+   push({level:"layers",title:item.title||"Kartenebenen",service:item});
   });
  }
  async function loadMoreServices(view){
   if(present()!==view)return;
   const id=++requestId,start=searchPosition;
-  const federal=view.state?.code!=="BE";
-  setStatus(federal?"Suche im bundesweiten Geodatenkatalog.de …":"Suche im Berliner Fachkartenkatalog …");
+  setStatus("Suche im Berliner Fachkartenkatalog …");
   try{
-   let page;
-   try{
-    page=await searchCSW(view.query,start,{category:view.category,state:view.state,mode:view.mode||"bounds"});
-   }catch(e){
-    if(!federal||view.mode==="name")throw e;
-    // Nicht jeder CSW-Server unterstützt den BBOX-Ausdruck in CQL.
-    // Fallback ist die landesspezifische Volltextabfrage.
-    view.mode="name";
-    page=await searchCSW(view.query,start,{category:view.category,state:view.state,mode:"name"});
-   }
+   const page=await searchCSW(view.query,start,{category:view.category});
    if(id!==requestId||present()!==view)return;
-   if(federal&&start===1&&page.matched===0&&view.mode!=="name"){
-    // Manche Kataloge bieten keine raeumlich filterbaren Treffer; mit
-    // landesbezogener Volltextsuche einen zweiten normierten Weg versuchen.
-    view.mode="name";
-    page=await searchCSW(view.query,start,{category:view.category,state:view.state,mode:"name"});
-    if(id!==requestId||present()!==view)return;
-   }
    searchPosition+=30;
    for(const item of page.results)showService(item);
-   setStatus(resultsCount+" amtliche WMS-Dienste gefunden. "+
-     (page.matched>=searchPosition?"Weitere Katalogseiten verfügbar.":""));
+   setStatus(resultsCount+" relevante WMS-Dienste gefunden. "+
+      (page.matched>=searchPosition?"Weitere Katalogseiten verfügbar.":"Weitere Treffer über die Suche möglich."));
    results.replaceChildren();
    if(page.matched>=searchPosition){
     const more=node("button","Weitere Kartendienste laden","gdi-more");
     more.type="button";more.addEventListener("click",()=>loadMoreServices(view));
     results.appendChild(more);
    }
-   if(!resultsCount){
-    const empty=node("p","In dieser Katalogseite keine direkt verwendbaren WMS-Dienste gefunden. Weitere Treffer laden oder das amtliche Landesportal öffnen.","gdi-hint");
-    results.appendChild(empty);
-   }
+   if(!resultsCount)results.appendChild(node("p","Noch keine passenden Fachkarten gefunden. Probiere einen anderen Suchbegriff oder die amtliche Suche.","gdi-hint"));
   }catch(error){
    if(id!==requestId||present()!==view)return;
-   setStatus("Amtlicher Katalog hier nicht erreichbar ("+error.message+"). Über den Link unten kannst du das zuständige Landesportal direkt öffnen.");
+   setStatus("Automatische Katalogsuche derzeit nicht verfügbar ("+error.message+"). Bekannte amtliche Karten oben kannst du trotzdem auswählen. Alternativ die amtliche Suche öffnen.");
   }
- }
- async function getServiceCapabilities(url, state){
-  if(state?.code==="BE")return capabilities(url);
-  // Die bundesweit gefundenen WMS stammen aus dem amtlichen GDI-DE-Katalog.
-  // CORS ist vom jeweiligen Dienstanbieter abhängig.
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
-  try{
-   const separator=url.includes("?")?"&":"?";
-   const response=await fetch(url+separator+"SERVICE=WMS&REQUEST=GetCapabilities&VERSION=1.1.1",
-    {mode:"cors",signal:controller.signal});
-   if(!response.ok)throw Error("WMS HTTP "+response.status);
-   const parse=window.AtlasGeoportal?.parseCapabilities;
-   if(typeof parse!=="function")throw Error("WMS-Parser ist nicht verfügbar.");
-   return parse(await response.text());
-  }finally{clearTimeout(timeout);}
- }
-
-
-// Amtlicher WMS mit bekanntem Schema by_dop_<Jahr>_h. Bei fehlendem
-// Cross-Origin-GetCapabilities bleibt ein explizit vom Nutzer gewaehltes
-// Befliegungsjahr erreichbar: die Existenz prueft dann der WMS selbst.
-function showBavariaHistory(view){
- results.replaceChildren();
- const confirmedBounds=new Map();
- const card=node("div",null,"gdi-layer-card");
- const heading=node("strong","Historische Digitale Orthophotos – Jahrgang wählen");
- const year=node("input");year.type="number";year.min="2003";year.max="2026";
- year.placeholder="z. B. 2018";year.required=true;
- year.style.cssText="width:100%;padding:11px;border:1px solid #c9dfce;border-radius:10px;margin:10px 0";
- const button=node("button","Jahrgang auf Karte legen");button.type="button";
- const info=node("p","Das Bayerische Landesamt stellt jedes Befliegungsjahr mit dem Namensschema by_dop_JAHR_h bereit. Die Verfügbarkeit des gewünschten Jahrgangs wird beim Laden geprüft.","gdi-hint");
- const available=node("div");available.className="gdi-layer-filter";
- const request=(yr)=>{
-  const n=Number(yr);
-  if(!Number.isInteger(n)||n<2003||n>2026){
-   setStatus("Bitte ein Befliegungsjahr zwischen 2003 und 2026 eingeben.");
-   return;
-  }
-  const name="by_dop_"+n+"_h";
-  const area=confirmedBounds.get(n)||[[47.15,8.85],[50.60,13.95]];
-  try{preview({
-   name:"Historisches Orthophoto Bayern "+n,year:n,region:"Bayern",
-   sourceUrl:view.service.url,type:"wms",layerName:name,
-   bounds:[[47.15,8.85],[50.60,13.95]],previewBounds:area,
-   detailUrl:"https://geodatenonline.bayern.de/geodatenonline/seiten/wms_dop_hist",
-   provider:"Bayerische Vermessungsverwaltung (LDBV)"
-  });}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
- };
- button.addEventListener("click",()=>request(year.value));
- card.append(heading,year,button,info);
- results.append(card,available);
- setStatus("Befliegungsjahr auswählen. Die Jahre gehören zu unterschiedlichen Teilgebieten Bayerns.");
- const token=++requestId;
- void getServiceCapabilities(view.service.url,view.state).then(cap=>{
-  if(present()!==view||token!==requestId)return;
-  const matches=(cap.leaves||[]).filter(l=>/^by_dop_20\d{2}_h$/.test(l.name));
-  if(!matches.length)return;
-  available.replaceChildren();
-  const hint=node("p","Vom WMS gemeldete Jahrgänge:","gdi-hint");
-  available.append(hint);
-  const wrap=node("div",null,"gdi-palette");
-  for(const layer of matches){
-   const y=Number(layer.name.match(/20\d{2}/)?.[0]);
-   if(Array.isArray(layer.box)&&layer.box.length===4)
-    confirmedBounds.set(y,[[layer.box[1],layer.box[0]],[layer.box[3],layer.box[2]]]);
-   const btn=node("button",String(y));btn.type="button";
-   btn.addEventListener("click",()=>request(y));
-   wrap.append(btn);
-  }
-  available.append(wrap);
-  setStatus(matches.length+" tatsächlich vom Bayerischen WMS bestätigte Jahrgänge.");
- }).catch(()=>{
-  if(present()===view&&token===requestId)
-   setStatus("Die WMS-Jahrgangsliste ist aus diesem Browser nicht abrufbar. Du kannst einen Jahrgang nach dem amtlich dokumentierten Namensschema direkt ausprobieren.");
- });
-}
- function showBavariaWmts(view){
-  const svc=view.service,body=node("div");
-  results.replaceChildren();
-  for(const layer of svc.layers){
-   const row=node("div",null,"gdi-layer-card");
-   const heading=node("strong",layer.title);
-   const button=node("button","Auf Karte legen");button.type="button";
-   const tileUrl="https://wmtsod5.bayernwolke.de/wmts/"+
-     layer.name+"/smerc/{z}/{x}/{y}."+layer.ext;
-   button.addEventListener("click",()=>{
-    const item={
-     name:layer.title,year:null,region:"Bayern",
-     sourceUrl:tileUrl,type:"xyz",layerName:"",
-     bounds:[[47.15,8.85],[50.60,13.95]],
-     previewBounds:BAVARIA_CENTER,
-     detailUrl:"https://geodatenonline.bayern.de/geodatenonline/seiten/wmts_ba",
-     provider:"Bayerische Vermessungsverwaltung (LDBV)"
-    };
-    try{preview(item)}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message)}
-   });
-   const detail=metadataDetails("Metadaten",[
-    {name:"Kartenebene",value:layer.title},
-    {name:"Amtliche WMTS-Layer-ID",value:layer.name},
-    {name:"Kachelmatrix",value:"smerc (EPSG:3857)"},
-    {name:"Original-GetCapabilities",value:BAYERN_WMTS},
-    {name:"Quelle",value:"Bayerische Vermessungsverwaltung"}
-   ],"","");
-   row.append(heading,button,detail);body.appendChild(row);
-  }
-  results.appendChild(body);
-  setStatus(svc.layers.length+" amtliche WMTS-Kartenebenen. Die Kachel-URLs sind bereits für EPSG:3857 vorbereitet.");
  }
  async function loadLayers(view){
-  if(view.service.type==="wmts"){showBavariaWmts(view);return;}
-  if(view.service.type==="historical-dop"){showBavariaHistory(view);return;}
   const id=++requestId;
   try{
-   let info;
-   try{info=await getServiceCapabilities(view.service.url,view.state);}
-   catch(e){
-    if(!view.service.fallbackLayers?.length)throw e;
-    // Der Layername ist fuer DTK500 amtlich dokumentiert; keine erfundenen Namen.
-    info={leaves:view.service.fallbackLayers};
-    setStatus("Dienstkatalog im Browser nicht erreichbar; amtlich dokumentierte Ebene wird angezeigt.");
-   }
+   const info=await capabilities(view.service.url);
    if(id!==requestId||present()!==view)return;
    const available=(info.leaves||[]).filter(l=>l.name&&!isBackground(l)&&!isIndexed(l));
-   const svc=view.state?.code==="BE"?services.find(s=>"https://gdi.berlin.de/services/wms/"+s.slug===view.service.url):null;
+   const svc=services.find(s=>"https://gdi.berlin.de/services/wms/"+s.slug===view.service.url);
    // For known aerial-photo services, display only actual photographs,
    // never photo-centre and sheet-footprint index layers.
    const aerial=svc?.id?.startsWith("aerial")||/luftbild_/.test(view.service.url);
@@ -661,25 +289,14 @@ function showBavariaHistory(view){
 
        const layerMetadata=metadataDetails("Metadaten",layerFields(layer,view.service),view.service.metadataXml||"","geoportal-metadaten.xml");
       const button=node("button","Auf Karte legen");button.type="button";
-      const berlin=view.state?.code==="BE";
-      // Andere Laender liefern teilweise nur UTM- oder GK-WMS. Diese
-      // duerfen auf Leaflets EPSG:3857-Karte nicht falsch gekachelt werden.
-      const crsCodes=(layer.crs||[]).join(" ");
-      const supported=berlin||/(?:^|\s)EPSG:3857(?:\s|$)/i.test(crsCodes);
-      if(!supported){
-       button.disabled=true;
-       button.textContent="Projektion nicht kompatibel";
-       button.title="Dieser WMS bietet kein EPSG:3857. Bitte im Originalportal ansehen.";
-      }
       button.addEventListener("click",()=>{
-       if(!supported)return;
        const name=layers.length===1?view.service.title:view.service.title+" · "+(layer.title||layer.name);
-       const item={name:name.slice(0,210),year:yearOf(name),region:view.state?.name||"Berlin",
-         sourceUrl:view.service.url,type:berlin?"geoportal":"wms",layerName:layer.name,
+       const item={name:name.slice(0,210),year:yearOf(name),region:"Berlin",
+         sourceUrl:view.service.url,type:"geoportal",layerName:layer.name,
          bounds:Array.isArray(layer.box)&&layer.box.length===4
            ?[[layer.box[1],layer.box[0]],[layer.box[3],layer.box[2]]]:null,
-         detailUrl:view.state?.portal||view.service.url,
-         provider:berlin?"Geoportal Berlin / Land Berlin":"Geodatenkatalog.de · "+(view.state?.name||"Deutschland")};
+         detailUrl:"https://gdi.berlin.de/view/"+view.service.url.split("/").pop(),
+         provider:"Geoportal Berlin / Land Berlin"};
        try{preview(item);}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
       });
       row.append(heading,button,layerMetadata);
@@ -706,23 +323,16 @@ function showBavariaHistory(view){
  form.addEventListener("submit",e=>{
   e.preventDefault();const query=normalQuery(input.value);
   if(!query){setStatus("Bitte einen Suchbegriff eingeben.");return;}
-  const state=present().state;
-  if(!state){setStatus("Bitte zuerst ein Bundesland auswählen.");return;}
-  push({level:"services",title:"Suche: "+query,state,query,preset:[]});
+  push({level:"services",title:"Suche: "+query,query,preset:[]});
  });
  urlForm.addEventListener("submit",e=>{
-  e.preventDefault();
-  const state=present().state;
-  if(!state){setStatus("Bitte zuerst ein Bundesland auswählen.");return;}
-  const url=normalizeCatalogWms(urlInput.value,true);
-  if(!url){setStatus("Bitte eine gültige öffentliche HTTP(S)-WMS-Adresse eingeben.");return;}
-  if(state.code==="BE"&&!/^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url)){
-   setStatus("Für Berlin sind hier ausschließlich die geprüften amtlichen WMS-Dienste zugelassen.");return;
+  e.preventDefault();const url=urlInput.value.trim().split("?")[0].replace(/^http:/,"https:");
+  if(!/^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url)){
+   setStatus("Hier können nur offizielle Berliner WMS-Dienste geladen werden.");return;
   }
-  push({level:"layers",title:"Kartenebenen",state,
-   service:{url,title:url.split("/").pop()||"WMS-Dienst",description:"Vom Nutzer angegebener WMS"}});
+  push({level:"layers",title:"Kartenebenen",service:{url,title:url.split("/").pop(),description:"Amtlicher Berliner WMS"}});
  });
  render();
 }
-window.AtlasGeoSearch={mount,parseCSW,parseNationalCSW,searchCSW,states:STATES,topics:TOPICS};
+window.AtlasGeoSearch={mount,parseCSW,searchCSW};
 })();
