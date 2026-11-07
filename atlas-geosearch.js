@@ -194,7 +194,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  const urlForm=node("form",null,"gdi-browser-search");
  const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Berliner WMS-Adresse einfügen";urlInput.setAttribute("aria-label","Offizielle Berliner WMS-URL");
  const urlButton=node("button","Öffnen");urlButton.type="submit";urlForm.append(urlInput,urlButton);
- extras.appendChild(node("p","Du hast bereits einen WMS-Link? Öffne hier seine Kartenebenen.","gdi-hint"),urlForm);
+ extras.append(node("p","Du hast bereits einen WMS-Link? Öffne hier seine Kartenebenen.","gdi-hint"),urlForm);
  root.append(form,crumbs,header,palette,status,results,extras);parent.appendChild(root);
  let stack=[{level:"root",title:"Fachkarten"}], requestId=0,searchPosition=1,selectedQuery="",serviceSeen=new Set(),resultsCount=0;
  const present=()=>stack[stack.length-1];
