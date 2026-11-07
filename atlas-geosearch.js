@@ -49,7 +49,7 @@ const LAND_NAV={
 const BAYERN_THEMES=[
  "Freizeit in Bayern","Geobasisdaten","Planen und Bauen",
  "Infrastruktur","Umwelt","Naturgefahren","Zeitreise",
- "Verwaltungsatlas","Energie","Heimat","Schulatlas"
+ "Verwaltungsatlas","Energie","Heimat","Schulatlas","BayernAtlas-plus"
 ];
 const BAYERN_WMTS="https://geoservices.bayern.de/od/wmts/geobasis/v1/1.0.0/WMTSCapabilities.xml";
 const BAYERN_MAPSERVICE={
@@ -361,6 +361,11 @@ function mount({parent,maps,preview,capabilities,services=[]}){
  official.href="https://www.geoportal.de/apps/land";
  official.target="_blank";official.rel="noopener noreferrer";
  extras.appendChild(official);
+ const bayernServicesLink=node("a","Amtliches Dienstverzeichnis Bayern");
+ bayernServicesLink.href="https://geoportal.bayern.de/geoportalbayern/seiten/dienste";
+ bayernServicesLink.target="_blank";bayernServicesLink.rel="noopener noreferrer";
+ bayernServicesLink.style.cssText="display:block;margin-top:8px";
+ extras.appendChild(bayernServicesLink);
  const urlForm=node("form",null,"gdi-browser-search");
  const urlInput=node("input");urlInput.type="url";urlInput.placeholder="Amtliche WMS-Adresse einfügen";urlInput.setAttribute("aria-label","WMS-Dienstadresse");
  const urlButton=node("button","Öffnen");urlButton.type="submit";urlForm.append(urlInput,urlButton);
@@ -392,6 +397,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   official.textContent=view.state?.code==="BY"&&view.level!=="state"?
    "BayernAtlas im Original öffnen":
    view.state?"Amtliches Geoportal "+view.state.name+" öffnen":"Geoportale der Bundesländer öffnen";
+  bayernServicesLink.hidden=view.state?.code!=="BY";
   urlForm.hidden=!view.state;
   if(view.level==="root"){
    for(const state of STATES)
