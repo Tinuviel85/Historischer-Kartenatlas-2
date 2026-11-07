@@ -142,13 +142,13 @@ function parseNationalCSW(xml){
  return {results:[...results.values()],matched};
 }
 function makeNationalConstraint(query,state,category,mode="bounds"){
- const topic="TopicCategory = '"+String(category||"").replace(/[^A-Za-z]/g,"")+"'";
+ const topic=category?"TopicCategory = '"+String(category).replace(/[^A-Za-z]/g,"")+"'":null;
  const term=normalQuery(query);
  const bbox=state.box.join(",");
  const space=mode==="bounds"
   ?"BBOX(ows:BoundingBox,"+bbox+")"
   :"AnyText like '%"+state.name.replace(/[^A-Za-zÄÖÜäöüß -]/g,"")+"%'";
- return [topic,space,...(term?["AnyText like '%"+term+"%'"]:[])].join(" AND ");
+ return [topic,space,...(term?["AnyText like '%"+term+"%'"]:[])].filter(Boolean).join(" AND ");
 }
 async function searchCSW(query,start,options={}){
  const isFederal=!!options.state&&options.state.code!=="BE";
@@ -375,6 +375,13 @@ function mount({parent,maps,preview,capabilities,services=[]}){
     page=await searchCSW(view.query,start,{category:view.category,state:view.state,mode:"name"});
    }
    if(id!==requestId||present()!==view)return;
+   if(federal&&start===1&&page.matched===0&&view.mode!=="name"){
+    // Manche Kataloge bieten keine raeumlich filterbaren Treffer; mit
+    // landesbezogener Volltextsuche einen zweiten normierten Weg versuchen.
+    view.mode="name";
+    page=await searchCSW(view.query,start,{category:view.category,state:view.state,mode:"name"});
+    if(id!==requestId||present()!==view)return;
+   }
    searchPosition+=30;
    for(const item of page.results)showService(item);
    setStatus(resultsCount+" amtliche WMS-Dienste gefunden. "+
@@ -441,7 +448,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
       // Andere Laender liefern teilweise nur UTM- oder GK-WMS. Diese
       // duerfen auf Leaflets EPSG:3857-Karte nicht falsch gekachelt werden.
       const crsCodes=(layer.crs||[]).join(" ");
-      const supported=berlin||/(?:^|\\s)EPSG:3857(?:\\s|$)/i.test(crsCodes);
+      const supported=berlin||/(?:^|\s)EPSG:3857(?:\s|$)/i.test(crsCodes);
       if(!supported){
        button.disabled=true;
        button.textContent="Projektion nicht kompatibel";
