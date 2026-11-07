@@ -386,9 +386,13 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   crumbs.textContent=stack.map(s=>s.title).join(" › ");
   step.textContent=view.title;
   back.hidden=stack.length===1;
-  official.href=view.state?.portal||"https://www.geoportal.de/apps/land";
-  official.textContent=view.state?"Amtliches Geoportal "+view.state.name+" öffnen":"Geoportale der Bundesländer öffnen";
-  urlForm.hidden=!(view.state?.code==="BE");
+  official.href=view.state?.code==="BY"&&view.level!=="state"
+   ?"https://geoportal.bayern.de/bayernatlas/":
+   (LAND_NAV[view.state?.code]?.portal||view.state?.portal||"https://www.geoportal.de/apps/land");
+  official.textContent=view.state?.code==="BY"&&view.level!=="state"?
+   "BayernAtlas im Original öffnen":
+   view.state?"Amtliches Geoportal "+view.state.name+" öffnen":"Geoportale der Bundesländer öffnen";
+  urlForm.hidden=!view.state;
   if(view.level==="root"){
    for(const state of STATES)
     addButton(state.name,()=>push({level:"state",title:state.name,state}));
@@ -692,11 +696,16 @@ function showBavariaHistory(view){
   push({level:"services",title:"Suche: "+query,state,query,preset:[]});
  });
  urlForm.addEventListener("submit",e=>{
-  e.preventDefault();const url=urlInput.value.trim().split("?")[0].replace(/^http:/,"https:");
-  if(!/^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url)){
-   setStatus("Hier können nur offizielle Berliner WMS-Dienste geladen werden.");return;
+  e.preventDefault();
+  const state=present().state;
+  if(!state){setStatus("Bitte zuerst ein Bundesland auswählen.");return;}
+  const url=normalizeCatalogWms(urlInput.value,true);
+  if(!url){setStatus("Bitte eine gültige öffentliche HTTP(S)-WMS-Adresse eingeben.");return;}
+  if(state.code==="BE"&&!/^https:\/\/gdi\.berlin\.de\/services\/wms\/[a-z0-9_-]{2,120}$/i.test(url)){
+   setStatus("Für Berlin sind hier ausschließlich die geprüften amtlichen WMS-Dienste zugelassen.");return;
   }
-  push({level:"layers",title:"Kartenebenen",state:stateFor("BE"),service:{url,title:url.split("/").pop(),description:"Amtlicher Berliner WMS"}});
+  push({level:"layers",title:"Kartenebenen",state,
+   service:{url,title:url.split("/").pop()||"WMS-Dienst",description:"Vom Nutzer angegebener WMS"}});
  });
  render();
 }
