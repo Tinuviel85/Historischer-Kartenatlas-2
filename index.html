@@ -885,8 +885,24 @@
         const h=Math.sin(dLat/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dLon/2)**2;
         return 12742*Math.asin(Math.min(1,Math.sqrt(h)));
       }
+      // Der Berliner ALKIS-Hauptdienst liefert die Liegenschaftskarte
+      // nur in den Massstaeben 1:500, 1:1000 und 1:2000. Ein fitBounds
+      // auf Gesamt-Berlin (Zoom ca. 10) ergibt daher leere WMS-Kacheln.
+      const isAlkisDetailMap=m=>!!m&&m.type==='geoportal'&&
+        /^https:\/\/gdi\.berlin\.de\/services\/wms\/alkis(?:_(?:flurstuecke|gebaeude))?$/i.test(m.sourceUrl||"");
+      function focusAlkisDetailMap(m){
+        if(!isAlkisDetailMap(m))return false;
+        const current=map.getCenter();
+        const lat=Number(current.lat),lon=Number(current.lng);
+        const inBerlin=lat>=52.33&&lat<=52.67&&lon>=13.07&&lon<=13.77;
+        const center=inBerlin?[lat,lon]:[52.5203,13.4050];
+        map.setView(center,18,{animate:false});
+        syncHistorical();
+        return true;
+      }
       function focusMap(m, previous, restored=false){
         if(restored)return;
+        if(focusAlkisDetailMap(m))return;
         if(focusPreviewBounds(m.previewBounds||m.bounds))return;
         const cfg=regionDefinitions[m.region];
         const current=map.getCenter();
@@ -1110,7 +1126,7 @@
           provider:item.provider||'Kartenanbieter',layerName:item.layerName||'auto'};
         const serial=++previewLocationSerial;
         try{
-          const jumped=focusPreviewBounds(m.previewBounds||m.bounds);
+          const jumped=focusAlkisDetailMap(m)||focusPreviewBounds(m.previewBounds||m.bounds);
           syncHistorical();
           preview={item:{...item},layer:createDisplayLayer(m)};
           preview.layer.addTo(historicalMap);
@@ -1139,7 +1155,9 @@
                 setNotice('Standort der Karte konnte nicht bestimmt werden.');
             });
           }
-          setNotice('Vorschau geöffnet. Du kannst die Karte jetzt prüfen und speichern.');
+          setNotice(isAlkisDetailMap(m)
+            ?'ALKIS: Detailmaßstab eingestellt. Der WMS zeigt Daten nur bei starker Vergrößerung.'
+            :'Vorschau geöffnet. Du kannst die Karte jetzt prüfen und speichern.');
         }catch(error){
           discardPreview(true);
           throw error;
@@ -1184,6 +1202,8 @@
         syncHistorical();
         layer=createDisplayLayer(m).addTo(historicalMap);
         applyPane();
+        if(isAlkisDetailMap(m))
+          setNotice('ALKIS-Darstellung: maximal bis Maßstab 1:2.000 herauszoomen; bei kleineren Maßstäben liefert der Dienst keine Karte.');
         $('sourceAttributionLink').href=m.detailUrl;
         $('sourceAttributionLink').textContent=m.provider.replace(' (alte Adresse)','');
         $('sourceAttributionLink').hidden=false;
