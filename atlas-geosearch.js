@@ -272,8 +272,14 @@ function mount({parent,maps,preview,capabilities,services=[]}){
    // never photo-centre and sheet-footprint index layers.
    const aerial=svc?.id?.startsWith("aerial")||/luftbild_/.test(view.service.url);
    const layers=aerial?available.filter(l=>/raster|mosaik|luftbild|bilddaten|orthophoto/i.test(l.name+" "+l.title)):available;
+   const mainAlkis=/\/alkis$/i.test(view.service.url);
    if(!layers.length){setStatus("Dieser Dienst bietet keine einbindbare Fachkartenebene an. Eventuell werden nur Übersichts-/Indexdaten angeboten.");return;}
    results.replaceChildren();
+   if(mainAlkis){
+    const advice=node("p","ALKIS Berlin: Die eigentliche Liegenschaftskarte findest du unter „Darstellung“. Sie ist laut Senatsverwaltung nur in den Maßstäben 1:500, 1:1.000 und 1:2.000 sichtbar. „Sachdaten“-Ebenen sind für Objektabfragen bestimmt und keine vollständige Kartendarstellung.","gdi-hint");
+    advice.style.cssText="border:1px solid #c9dfce;border-radius:9px;padding:11px;background:#f5faf5;margin:8px 0";
+    results.appendChild(advice);
+   }
    const filter=node("input",null,"gdi-layer-filter");filter.type="search";filter.placeholder="Kartenebenen filtern …";
    filter.setAttribute("aria-label","Fachkartenebenen durchsuchen");results.appendChild(filter);
    const body=node("div");results.appendChild(body);
@@ -288,6 +294,17 @@ function mount({parent,maps,preview,capabilities,services=[]}){
       const heading=node("strong",layer.title||layer.name);
 
        const layerMetadata=metadataDetails("Metadaten",layerFields(layer,view.service),view.service.metadataXml||"","geoportal-metadaten.xml");
+      const isDataOnly=mainAlkis&&(/(?:^|_)sd$/i.test(layer.name||"")||/\(Sachdaten\)/i.test(layer.title||""));
+      if(isDataOnly){
+       const note=node("p","Sachdatensatz zur Objektabfrage – keine eigenständige Liegenschaftskarte.","gdi-hint");
+       const link=node("a","Im Geoportal abfragen");
+       link.href="https://gdi.berlin.de/view/alkis";
+       link.target="_blank";link.rel="noopener noreferrer";
+       link.style.cssText="display:inline-block;font-size:12px;margin:8px 0";
+       row.append(heading,note,link,layerMetadata);
+       fragment.append(row);
+       continue;
+      }
       const button=node("button","Auf Karte legen");button.type="button";
       button.addEventListener("click",()=>{
        const name=layers.length===1?view.service.title:view.service.title+" · "+(layer.title||layer.name);
@@ -311,7 +328,9 @@ function mount({parent,maps,preview,capabilities,services=[]}){
      }
     };
     addCards();
-    setStatus(layers.length+" einbindbare Fachkartenebenen. „Auf Karte legen“ öffnet eine ungespeicherte Vorschau.");
+    setStatus(mainAlkis
+      ?'ALKIS: „Darstellung“ auswählen. Der Kartendienst benötigt einen Detailmaßstab von 1:2.000 oder größer.'
+      :layers.length+' einbindbare Fachkartenebenen. „Auf Karte legen“ öffnet eine ungespeicherte Vorschau.');
    };
    filter.addEventListener("input",show);show();
   }catch(error){
