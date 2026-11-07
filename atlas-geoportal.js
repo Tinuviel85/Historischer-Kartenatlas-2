@@ -56,7 +56,15 @@ function parseCapabilities(raw){
    abstract:directText(layer,"Abstract"),
    keywords:directChildren(layer,"KeywordList").flatMap(n=>
       Array.from(n.getElementsByTagNameNS("*","Keyword")).map(x=>x.textContent.trim()).filter(Boolean)),
-   crs:directChildren(layer,"CRS").concat(directChildren(layer,"SRS")).map(x=>x.textContent.trim()),
+   crs:(function(){
+    const set=new Set();
+    for(let anc=layer;anc&&anc.nodeType===1;anc=anc.parentElement){
+     for(const el of directChildren(anc,"CRS").concat(directChildren(anc,"SRS")))
+      for(const code of (el.textContent||"").trim().split(/\\s+/))if(code)set.add(code);
+     if(anc.localName==="Capability")break;
+    }
+    return [...set];
+   })(),
    styles:directChildren(layer,"Style").map(x=>directText(x,"Name")).filter(Boolean),
    metadataUrls:childLinks(layer,"MetadataURL"),dataUrls:childLinks(layer,"DataURL"),
    attribution:directChildren(layer,"Attribution").map(x=>directText(x,"Title")).filter(Boolean).join("; "),
@@ -136,6 +144,52 @@ function wmsImage(names,bounds,L,size){
  });
  return query;
 }
+// ETRS89 / UTM Zone 33N (EPSG:25833), amtliches Karten-CRS in Berlin.
+// Leaflet bringt nur 3857/4326 mit. Die Projektion wird hier lokal in
+// WMS-BBOX-Koordinaten umgerechnet; keine zusaetzliche Bibliothek noetig.
+function berlinUTM33(L){
+ const a=6378137,f=1/298.257222101,e2=f*(2-f),ep2=e2/(1-e2),k0=.9996;
+ return {code:"EPSG:25833",project:function(ll){
+  const p=ll.lat*Math.PI/180,d=(ll.lng-15)*Math.PI/180;
+  const sn=Math.sin(p),cs=Math.cos(p),tan=Math.tan(p),T=tan*tan,C=ep2*cs*cs,A=cs*d;
+  const n=a/Math.sqrt(1-e2*sn*sn);
+  const m=a*((1-e2/4-3*e2*e2/64-5*e2**3/256)*p
+   -(3*e2/8+3*e2*e2/32+45*e2**3/1024)*Math.sin(2*p)
+   +(15*e2*e2/256+45*e2**3/1024)*Math.sin(4*p)
+   -35*e2**3/3072*Math.sin(6*p));
+  return L.point(500000+k0*n*(A+(1-T+C)*A**3/6+(5-18*T+T*T+72*C-58*ep2)*A**5/120),
+   k0*(m+n*tan*(A*A/2+(5-T+9*C+4*C*C)*A**4/24+(61-58*T+T*T+600*C-330*ep2)*A**6/720)));
+ }};
+}
+// Oeffentlich dokumentierte Luftbildkacheln von Code for Germany / OpenStreetMap.
+// Nur exakt nachgewiesene Jahrgaenge; nie Jahrgaenge umetikettieren.
+const PHOTO_TMS={
+ "1928":"https://tiles.codefor.de/berlin-1928/{z}/{x}/{y}.png",
+ "1953":"https://tiles.codefor.de/berlin-1953/{z}/{x}/{y}.png",
+ "2014":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2014-dop20rgb/{z}/{x}/{y}.png",
+ "2015":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2015-dop20rgb/{z}/{x}/{y}.png",
+ "2016":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2016-dop20rgb/{z}/{x}/{y}.png",
+ "2017":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2017-dop20rgb/{z}/{x}/{y}.png",
+ "2018":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2018-dop20rgb/{z}/{x}/{y}.png",
+ "2019":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2019-dop20rgb/{z}/{x}/{y}.png",
+ "2020":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2020-truedop20rgb/{z}/{x}/{y}.png",
+ "2021":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2021-dop20rgbi/{z}/{x}/{y}.png",
+ "2022":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2022-dop20rgbi/{z}/{x}/{y}.png",
+ "2023":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2023-dop20rgbi/{z}/{x}/{y}.png",
+ "2024":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2024-dop20rgbi/{z}/{x}/{y}.png",
+ "2025":"https://tiles.codefor.de/berlin/geoportal/luftbilder/2025-dop20rgb/{z}/{x}/{y}.png"
+};
+function mirrorFor(url){
+ const slug=url.split("/").pop()||"";
+ const yr=slug.match(/(?:^|_)(19\d{2}|20\d{2})(?:_|$)/)?.[1]||"";
+ if(yr==="2025"&&/sommer|true/i.test(slug))
+  return "https://tiles.codefor.de/berlin/geoportal/luftbilder/2025-truedop20rgb/{z}/{x}/{y}.png";
+ return PHOTO_TMS[yr]||null;
+}
+function supportedCrsFor(info,names){
+ const list=(info?.leaves||[]).filter(l=>names.split(",").some(n=>l.name===n||l.name.endsWith(":"+n)));
+ return [...new Set(list.flatMap(l=>l.crs||[]).flatMap(x=>String(x).split(/\s+/)).filter(Boolean))];
+}
 function createLayer(L,url,onError,options={}){
  if(!allowedUrl(url))throw Error("Unbekannter Berliner Kartendienst.");
  const service=serviceForUrl(url);
@@ -146,76 +200,93 @@ function createLayer(L,url,onError,options={}){
  // Other Fachkarten use ordinary WMS tiles as before.
  const photo=/luftbild|dop_|orthophoto|straubeplan/i.test(url);
  if(photo){
-  // Kleinformatige WMS-Kacheln statt grossen bildschirmfuellenden
-  // GetMap-Anfragen: diese fuehrten bei Fotomosaiken zu HTTP 502.
   const PhotoWMS=L.Layer.extend({
    initialize:function(){
-    this._map=null;this._inner=null;this._opacity=1;this._version=0;
-    this._stage=0;this._errors=0;this._loaded=false;this._warned=false;
-    this._names="";this._retryTimer=null;
+    this._map=null;this._inner=null;this._opacity=1;this._version=0;this._stage=0;
+    this._loaded=false;this._warned=false;this._names="";this._retryTimer=null;this._variants=[];
    },
    onAdd:function(map){
     this._map=map;const v=++this._version;
     const explicit=typeof options.layerName==="string"&&options.layerName.trim()&&options.layerName!=="auto"
-     ?options.layerName.trim():"";
-    if(explicit){this._start(explicit,v);return;}
+      ?options.layerName.trim():"";
+    if(explicit){
+     this._start(explicit,v,cache.get(url));
+     return;
+    }
     capabilities(url).then(info=>{
      if(v!==this._version||this._map!==map)return;
-     this._start(selectedWmsLayers(url,info,"auto").map(x=>x.name).join(","),v);
+     this._start(selectedWmsLayers(url,info,"auto").map(x=>x.name).join(","),v,info);
     }).catch(e=>{
      if(v!==this._version||this._map!==map)return;
-     if(service?.wmsLayers?.length){
-      // Bei vorbekannten Layernamen trotz fehlender Capabilities testen.
-      this._start(service.wmsLayers.join(","),v);
-     }else onError?.("Kartendienst: "+e.message);
+     if(service?.wmsLayers?.length)this._start(service.wmsLayers.join(","),v,null);
+     else onError?.("Luftbild-Layer nicht abrufbar: "+e.message);
     });
    },
-   _start:function(names,v){
+   _start:function(names,v,info){
     if(!names||v!==this._version||!this._map)return;
-    this._names=names;this._draw(v);
+    this._names=names;
+    // Keine 3857-Anfragen senden, wenn der amtliche Dienst nur 25833
+    // und/oder 4326 anbietet (haeufig bei Berliner Luftbildern).
+    const codes=supportedCrsFor(info,names);
+    const permitted=code=>!codes.length||codes.includes(code);
+    const crs=[
+     ["EPSG:25833",berlinUTM33(L)],
+     ["EPSG:4326",L.CRS.EPSG4326],
+     ["EPSG:3857",L.CRS.EPSG3857]
+    ].filter(([code])=>permitted(code)).map(([,crs])=>crs);
+    // Bei fehlenden SRS-Daten zunaechst ETRS89 / UTM33 probieren.
+    if(!crs.length)crs.push(berlinUTM33(L),L.CRS.EPSG4326);
+    const isHistorical=/luftbild_19[0-9]{2}|straubeplan/i.test(url);
+    const formats=isHistorical?["image/png","image/jpeg"]:["image/jpeg","image/png"];
+    this._variants=[];
+    for(const crsOption of crs)for(const format of formats)
+     this._variants.push({crs:crsOption,format});
+    const tileUrl=mirrorFor(url);
+    if(tileUrl)this._variants.push({tileUrl});
+    this._stage=0;this._draw(v);
    },
    _draw:function(v){
     if(v!==this._version||!this._map)return;
-    const map=this._map,stage=this._stage;
-    const isPlan=/straubeplan|luftbild_19[0-9]{2}/i.test(url);
-    // Alte Einzelblattserien benoetigen bevorzugt transparente PNG-Kacheln.
-    const choices=isPlan
-      ?[{format:"image/png",crs:L.CRS.EPSG3857,transparent:true},
-        {format:"image/jpeg",crs:L.CRS.EPSG3857,transparent:false},
-        {format:"image/png",crs:L.CRS.EPSG4326,transparent:true}]
-      :[{format:"image/jpeg",crs:L.CRS.EPSG3857,transparent:false},
-        {format:"image/png",crs:L.CRS.EPSG3857,transparent:true},
-        {format:"image/png",crs:L.CRS.EPSG4326,transparent:true}];
-    if(stage>=choices.length){
+    const map=this._map,variant=this._variants[this._stage];
+    clearTimeout(this._retryTimer);this._retryTimer=null;
+    if(!variant){
      if(!this._warned){
       this._warned=true;
-      onError?.("Der amtliche Luftbilddienst liefert derzeit keine Kartenbilder. Bitte den Originaldienst pruefen.");
+      onError?.("Luftbild konnte nicht geladen werden: Der amtliche Bilddienst hat alle unterstuetzten Abrufe abgewiesen.");
      }
      return;
     }
-    const variant=choices[stage];
-    this._errors=0;this._loaded=false;
     const old=this._inner;
     if(old&&map.hasLayer(old))map.removeLayer(old);
-    const inner=L.tileLayer.wms(url,{
-     layers:this._names,format:variant.format,transparent:variant.transparent,
-     crs:variant.crs,version:"1.1.1",tileSize:256,minZoom:2,maxZoom:19,
-     updateWhenIdle:true,updateWhenZooming:false,keepBuffer:0,
-     noWrap:true,opacity:this._opacity
-    });
+    this._loaded=false;
+    const inner=variant.tileUrl
+     ?L.tileLayer(variant.tileUrl,{
+       tms:true,tileSize:256,minZoom:2,maxZoom:19,keepBuffer:0,noWrap:true,
+       updateWhenIdle:true,updateWhenZooming:false,opacity:this._opacity,
+       attribution:"Geoportal Berlin / Land Berlin · Code for Germany"
+      })
+     :L.tileLayer.wms(url,{
+       layers:this._names,styles:"",format:variant.format,
+       transparent:variant.format==="image/png",
+       crs:variant.crs,version:"1.1.1",tileSize:256,minZoom:2,maxZoom:19,
+       keepBuffer:0,noWrap:true,updateWhenIdle:true,
+       updateWhenZooming:false,opacity:this._opacity
+      });
     this._inner=inner;
-    inner.on("tileload",()=>{if(this._inner===inner)this._loaded=true;});
-    inner.on("tileerror",()=>{
+    inner.on("tileload",()=>{
      if(this._inner!==inner||v!==this._version)return;
-     this._errors++;
-     if(this._loaded||this._errors<2)return;
-     if(this._retryTimer)return;
-     this._retryTimer=setTimeout(()=>{
-      this._retryTimer=null;
-      if(this._inner===inner&&v===this._version&&!this._loaded){
-       this._stage++;this._draw(v);
-      }
-     },450);
+     this._loaded=true;clearTimeout(this._retryTimer);this._retryTimer=null;
+    });
+    inner.on("tileerror",()=>{
+     if(this._inner!==inner||v!==this._version||this._loaded)return;
+     if(!this._retryTimer){
+      this._retryTimer=setTimeout(()=>{
+       this._retryTimer=null;
+       if(this._inner===inner&&v===this._version&&!this._loaded){
+        this._stage++;this._draw(v);
+       }
+      },500);
+     }
     });
     inner.addTo(map);
    },
