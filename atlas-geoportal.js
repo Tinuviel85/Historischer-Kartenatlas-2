@@ -190,8 +190,126 @@ function supportedCrsFor(info,names){
  const list=(info?.leaves||[]).filter(l=>names.split(",").some(n=>l.name===n||l.name.endsWith(":"+n)));
  return [...new Set(list.flatMap(l=>l.crs||[]).flatMap(x=>String(x).split(/\s+/)).filter(Boolean))];
 }
+// Straubes 44 Einzelblaetter: bevorzugt den dokumentierten Web-Mercator-
+// Tile-Dienst verwenden. EPSG:25833-WMS-Kacheln auf einer EPSG:3857-Karte
+// ohne echte Reprojektion zu verteilen verschiebt deren Bildinhalte sichtbar
+// an jeder 256px-Kachelgrenze.
+const STRAUBE_TILES="https://tiles.codefor.de/berlin-straubeplan/{z}/{x}/{y}.png";
+function createStraubeLayer(L,url,onError,options={}){
+ const Straube=L.Layer.extend({
+  initialize:function(){
+   this._map=null;this._mirror=null;this._wmsCurrent=null;this._wmsPending=null;
+   this._opacity=1;this._serial=0;this._mirrorLoaded=0;this._mirrorFailed=0;
+   this._timer=null;this._retry=0;this._usingWMS=false;this._warningShown=false;
+  },
+  onAdd:function(map){
+   this._map=map;this._serial++;
+   const serial=this._serial;
+   const mirror=L.tileLayer(STRAUBE_TILES,{
+    minZoom:2,maxZoom:19,maxNativeZoom:18,noWrap:true,
+    tileSize:256,keepBuffer:2,updateWhenIdle:true,opacity:this._opacity,
+    attribution:"Straube 1910 · Landesarchiv Berlin / Code for Germany"
+   });
+   this._mirror=mirror;
+   mirror.on("tileload",()=>{if(serial===this._serial)this._mirrorLoaded++;});
+   mirror.on("tileerror",()=>{
+    if(serial!==this._serial||this._usingWMS||this._mirrorLoaded)return;
+    this._mirrorFailed++;
+    // Fehler ausserhalb des historischen Kartengebiets sind moeglich.
+    // Erst wenn mehrere sichtbare Kacheln scheitern, den WMS versuchen.
+    if(this._mirrorFailed>=2)this._startWMS();
+   });
+   mirror.addTo(map);
+  },
+  _startWMS:function(){
+   const map=this._map;
+   if(!map||this._usingWMS)return;
+   this._usingWMS=true;
+   if(this._mirror&&map.hasLayer(this._mirror))map.removeLayer(this._mirror);
+   this._mirror=null;
+   this._retry=0;
+   map.on("moveend zoomend resize",this._schedule,this);
+   this._schedule(true);
+  },
+  _schedule:function(immediate){
+   clearTimeout(this._timer);
+   this._timer=setTimeout(()=>this._refresh(),immediate===true?0:170);
+  },
+  _refresh:function(){
+   const map=this._map;
+   if(!map||!this._usingWMS)return;
+   const serial=++this._serial;
+   const b=map.getBounds(),size=map.getSize();
+   if(!size.x||!size.y)return;
+   const project=berlinUTM33(L).project;
+   // Alle vier Ecken beruecksichtigen: UTM-Achsen sind gegenueber dem
+   // Web-Mercator-Rechteck leicht gedreht.
+   const pts=[
+    project(b.getSouthWest()),project(b.getSouthEast()),
+    project(b.getNorthWest()),project(b.getNorthEast())
+   ];
+   const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);
+   const bounding=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];
+   const factor=Math.min(1,(this._retry?700:1000)/Math.max(size.x,size.y));
+   const width=Math.max(1,Math.round(size.x*factor));
+   const height=Math.max(1,Math.round(size.y*factor));
+   const params=new URLSearchParams({
+    SERVICE:"WMS",VERSION:"1.1.1",REQUEST:"GetMap",
+    LAYERS:options.layerName&&options.layerName!=="auto"
+      ?options.layerName:"straubeplan",
+    STYLES:"",SRS:"EPSG:25833",BBOX:bounding.join(","),
+    WIDTH:String(width),HEIGHT:String(height),
+    FORMAT:"image/png",TRANSPARENT:"TRUE"
+   });
+   const img=L.imageOverlay(url+"?"+params.toString(),b,{
+    opacity:this._opacity,interactive:false
+   });
+   if(this._wmsPending&&map.hasLayer(this._wmsPending))
+    map.removeLayer(this._wmsPending);
+   this._wmsPending=img;
+   const loaded=()=>{
+    if(serial!==this._serial||this._map!==map)return;
+    const previous=this._wmsCurrent;
+    this._wmsCurrent=img;this._wmsPending=null;this._retry=0;
+    if(previous&&map.hasLayer(previous))map.removeLayer(previous);
+   };
+   const failed=()=>{
+    if(serial!==this._serial||this._map!==map)return;
+    if(map.hasLayer(img))map.removeLayer(img);
+    if(this._wmsPending===img)this._wmsPending=null;
+    if(this._retry===0){
+     this._retry=1;this._schedule(true);
+    }else if(!this._warningShown){
+     this._warningShown=true;
+     onError?.("Straubeplan: Weder die vorbereiteten Kartenkacheln noch der amtliche WMS sind aktuell erreichbar.");
+    }
+   };
+   img.once("load",loaded);
+   img.once("error",failed);
+   img.addTo(map);
+  },
+  onRemove:function(map){
+   this._serial++;clearTimeout(this._timer);
+   map.off("moveend zoomend resize",this._schedule,this);
+   for(const layer of [this._mirror,this._wmsCurrent,this._wmsPending]){
+    if(layer&&map.hasLayer(layer))map.removeLayer(layer);
+   }
+   this._mirror=null;this._wmsCurrent=null;this._wmsPending=null;this._map=null;
+  },
+  setOpacity:function(value){
+   this._opacity=Math.max(0,Math.min(1,Number(value)));
+   for(const layer of [this._mirror,this._wmsCurrent,this._wmsPending])
+    layer?.setOpacity(this._opacity);
+   return this;
+  },
+  getOpacity:function(){return this._opacity;}
+ });
+ return new Straube();
+}
 function createLayer(L,url,onError,options={}){
  if(!allowedUrl(url))throw Error("Unbekannter Berliner Kartendienst.");
+ if(/\/straubeplan$/i.test(url))
+  return createStraubeLayer(L,url,onError,options);
  const service=serviceForUrl(url);
  if(service?.indexOnly)throw Error("Der Dienst stellt nur einen Bildnachweis bereit.");
  // Aerial photo mosaics need far fewer, larger WMS GetMap requests than
