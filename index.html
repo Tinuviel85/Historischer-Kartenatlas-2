@@ -134,8 +134,8 @@
     .detail-desc b{color:#30483c}
     .check-row{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:650;color:#486453;margin-top:10px}
     .check-row input{accent-color:#1d5b48}
-    .toast{position:absolute;z-index:1600;left:50%;top:auto;bottom:195px;transform:translate(-50%,12px);background:#224a3e;color:white;font-size:12px;border-radius:11px;padding:12px 17px;box-shadow:var(--shadow);max-width:min(490px,calc(100% - 25px));line-height:1.45;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;text-align:center}
-    .toast.show{opacity:1;transform:translate(-50%,0)}
+    .toast{position:fixed;z-index:1600;left:50%;top:46%;bottom:auto;transform:translate(-50%,-42%);background:#224a3e;color:white;font-size:12px;border-radius:11px;padding:12px 17px;box-shadow:var(--shadow);max-width:min(490px,calc(100% - 25px));line-height:1.45;pointer-events:none;opacity:0;transition:opacity .4s ease,transform .4s ease;text-align:center}
+    .toast.show{opacity:1;transform:translate(-50%,-50%)}
     .toast-dismiss{border:0;background:transparent;color:#fff;margin-left:9px;padding:2px 4px;font-weight:800;pointer-events:auto}
     .gps-map-button{position:absolute;z-index:760;right:17px;top:78px;border:1px solid #dce6dd;border-radius:11px;background:white;color:#214c3f;padding:10px 12px;display:flex;align-items:center;justify-content:center;gap:7px;font-weight:750;font-size:12px;box-shadow:0 4px 18px #18372928;min-height:40px}
     .gps-map-button:hover{background:#eef7f1}
@@ -186,7 +186,7 @@
       .timeline{padding:9px 11px}.compare-label{top:166px}
       .detail-card{left:12px;bottom:calc(111px + env(safe-area-inset-bottom));width:calc(100% - 24px);max-height:35dvh}
       .stage.is-comparing .detail-card{bottom:calc(159px + env(safe-area-inset-bottom))}
-      .toast{bottom:calc(195px + env(safe-area-inset-bottom))}
+      .toast{top:44%;bottom:auto}
       .address-popup{top:109px;right:12px}
     }
     @media(max-height:540px){.detail-card{bottom:92px}.map-bottom{bottom:9px}.map-topbar{top:9px}}
@@ -604,11 +604,11 @@
       $('zoomOut').addEventListener('click',()=>{suspendAutoFollow();map.zoomOut();});
       const dismissNotice=()=>{$('toast').classList.remove('show');clearTimeout(toastTimer);};
       $('toastDismiss').addEventListener('click',dismissNotice);
-      const setNotice=(message,duration=3200)=>{
+      const setNotice=(message,duration=3000)=>{
         dismissNotice();
         $('toastText').textContent=message;
         $('toast').classList.add('show');
-        if(duration>0)toastTimer=setTimeout(dismissNotice,Math.min(duration,4200));
+        toastTimer=setTimeout(dismissNotice,3000);
       };
       // Tree information is queried only when the user taps the map while
       // the current Baumbestand layer is active. All values are rendered as
