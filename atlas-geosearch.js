@@ -528,6 +528,7 @@ function mount({parent,maps,preview,capabilities,services=[]}){
 // Befliegungsjahr erreichbar: die Existenz prueft dann der WMS selbst.
 function showBavariaHistory(view){
  results.replaceChildren();
+ const confirmedBounds=new Map();
  const card=node("div",null,"gdi-layer-card");
  const heading=node("strong","Historische Digitale Orthophotos – Jahrgang wählen");
  const year=node("input");year.type="number";year.min="2003";year.max="2026";
@@ -543,10 +544,11 @@ function showBavariaHistory(view){
    return;
   }
   const name="by_dop_"+n+"_h";
+  const area=confirmedBounds.get(n)||[[47.15,8.85],[50.60,13.95]];
   try{preview({
    name:"Historisches Orthophoto Bayern "+n,year:n,region:"Bayern",
    sourceUrl:view.service.url,type:"wms",layerName:name,
-   bounds:[[47.15,8.85],[50.60,13.95]],previewBounds:BAVARIA_CENTER,
+   bounds:[[47.15,8.85],[50.60,13.95]],previewBounds:area,
    detailUrl:"https://geodatenonline.bayern.de/geodatenonline/seiten/wms_dop_hist",
    provider:"Bayerische Vermessungsverwaltung (LDBV)"
   });}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
@@ -566,6 +568,8 @@ function showBavariaHistory(view){
   const wrap=node("div",null,"gdi-palette");
   for(const layer of matches){
    const y=Number(layer.name.match(/20\d{2}/)?.[0]);
+   if(Array.isArray(layer.box)&&layer.box.length===4)
+    confirmedBounds.set(y,[[layer.box[1],layer.box[0]],[layer.box[3],layer.box[2]]]);
    const btn=node("button",String(y));btn.type="button";
    btn.addEventListener("click",()=>request(y));
    wrap.append(btn);
