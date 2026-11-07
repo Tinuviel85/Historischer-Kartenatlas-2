@@ -337,6 +337,10 @@ function mount({parent,maps,preview,capabilities,services=[]}){
     addButton(state.name,()=>push({level:"state",title:state.name,state}));
    }
   }else if(view.level==="state"){
+   // Wie im amtlichen Geoportal: zuerst die Kartensparte Fachkarten,
+   // danach die 16 ISO-Themenkategorien ohne frei erfundene Untergruppen.
+   addButton("Fachkarten",()=>push({level:"topics",title:"Fachkarten",state:view.state}));
+  }else if(view.level==="topics"){
    for(const topic of TOPICS){
     addButton(topic.label,()=>push({level:"services",title:topic.label,
      state:view.state,category:topic.code,query:"",preset:[]}));
