@@ -862,7 +862,7 @@ function mount({parent,maps,preview}){
  style.textContent=".gdi-catalog{margin:9px 0;border:1px solid #d5e4d9;border-radius:12px;background:#fff;overflow:hidden}.gdi-catalog>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:14px 15px;background:#f3f8f4;color:#264b3a;font-size:14px;font-weight:800;border-radius:11px}.gdi-catalog>summary::-webkit-details-marker{display:none}.gdi-catalog>summary:after{content:'⌄';font-size:20px;color:#527262;margin-left:10px;transition:transform .2s}.gdi-catalog[open]>summary:after{transform:rotate(180deg)}.gdi-catalog[open]>summary{border-bottom:1px solid #dfe9e1;border-radius:11px 11px 0 0}.gdi-catalog .gdi-provider-content{padding:12px}.gdi-catalog:focus-within{outline-color:#b6d2bc}";
  document.head.appendChild(style);
  const wrap=document.createElement("details");wrap.className="gdi-catalog";wrap.id="managerGeoportalProvider";
- const summary=document.createElement("summary");summary.textContent="Geoportal";
+ const summary=document.createElement("summary");summary.textContent="Geoportal Berlin";
  const content=document.createElement("div");content.className="gdi-provider-content";
  wrap.append(summary,content);parent.prepend(wrap);
  if(window.AtlasGeoSearch)window.AtlasGeoSearch.mount({parent:content,maps,preview,capabilities,services:SERVICES});
