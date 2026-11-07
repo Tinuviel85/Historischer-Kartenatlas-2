@@ -43,8 +43,7 @@ function parseCapabilities(raw){
  if(!nodes.length)throw Error("Keine WMS-Kartenebenen gefunden.");
  const crs=Array.from(xml.getElementsByTagNameNS("*","SRS"))
    .concat(Array.from(xml.getElementsByTagNameNS("*","CRS")));
- if(!crs.some(e=>/(^|\s)EPSG:3857(\s|$)/i.test(e.textContent||"")))
-   throw Error("Der Dienst bestätigt keine Web-Mercator-Darstellung (EPSG:3857).");
+ // Auch Dienste mit EPSG:4326 werden in der Ebenenauswahl angezeigt.
  function childLinks(l,name){
    return directChildren(l,name).flatMap(m=>
       Array.from(m.getElementsByTagNameNS("*","OnlineResource")).map(u=>
@@ -147,99 +146,90 @@ function createLayer(L,url,onError,options={}){
  // Other Fachkarten use ordinary WMS tiles as before.
  const photo=/luftbild|dop_|orthophoto|straubeplan/i.test(url);
  if(photo){
-  const ViewWMS=L.Layer.extend({
-   initialize:function(){this._map=null;this._opacity=1;this._version=0;this._current=null;this._pending=null;this._fallback=null;this._timer=null;this._warned=false;},
+  // Kleinformatige WMS-Kacheln statt grossen bildschirmfuellenden
+  // GetMap-Anfragen: diese fuehrten bei Fotomosaiken zu HTTP 502.
+  const PhotoWMS=L.Layer.extend({
+   initialize:function(){
+    this._map=null;this._inner=null;this._opacity=1;this._version=0;
+    this._stage=0;this._errors=0;this._loaded=false;this._warned=false;
+    this._names="";this._retryTimer=null;
+   },
    onAdd:function(map){
-    this._map=map;this._version++;
-    map.on("moveend zoomend resize",this._schedule,this);
-    this._schedule(true);
+    this._map=map;const v=++this._version;
+    const explicit=typeof options.layerName==="string"&&options.layerName.trim()&&options.layerName!=="auto"
+     ?options.layerName.trim():"";
+    if(explicit){this._start(explicit,v);return;}
+    capabilities(url).then(info=>{
+     if(v!==this._version||this._map!==map)return;
+     this._start(selectedWmsLayers(url,info,"auto").map(x=>x.name).join(","),v);
+    }).catch(e=>{
+     if(v!==this._version||this._map!==map)return;
+     if(service?.wmsLayers?.length){
+      // Bei vorbekannten Layernamen trotz fehlender Capabilities testen.
+      this._start(service.wmsLayers.join(","),v);
+     }else onError?.("Kartendienst: "+e.message);
+    });
+   },
+   _start:function(names,v){
+    if(!names||v!==this._version||!this._map)return;
+    this._names=names;this._draw(v);
+   },
+   _draw:function(v){
+    if(v!==this._version||!this._map)return;
+    const map=this._map,stage=this._stage;
+    const isPlan=/straubeplan/i.test(url);
+    const choices=isPlan
+      ?[{format:"image/png",crs:L.CRS.EPSG3857,transparent:true},
+        {format:"image/jpeg",crs:L.CRS.EPSG3857,transparent:false},
+        {format:"image/png",crs:L.CRS.EPSG4326,transparent:true}]
+      :[{format:"image/jpeg",crs:L.CRS.EPSG3857,transparent:false},
+        {format:"image/png",crs:L.CRS.EPSG3857,transparent:true},
+        {format:"image/png",crs:L.CRS.EPSG4326,transparent:true}];
+    if(stage>=choices.length){
+     if(!this._warned){
+      this._warned=true;
+      onError?.("Der amtliche Luftbilddienst liefert derzeit keine Kartenbilder. Bitte den Originaldienst pruefen.");
+     }
+     return;
+    }
+    const variant=choices[stage];
+    this._errors=0;this._loaded=false;
+    const old=this._inner;
+    if(old&&map.hasLayer(old))map.removeLayer(old);
+    const inner=L.tileLayer.wms(url,{
+     layers:this._names,format:variant.format,transparent:variant.transparent,
+     crs:variant.crs,version:"1.1.1",tileSize:256,minZoom:2,maxZoom:19,
+     updateWhenIdle:true,updateWhenZooming:false,keepBuffer:0,
+     noWrap:true,opacity:this._opacity
+    });
+    this._inner=inner;
+    inner.on("tileload",()=>{if(this._inner===inner)this._loaded=true;});
+    inner.on("tileerror",()=>{
+     if(this._inner!==inner||v!==this._version)return;
+     this._errors++;
+     if(this._loaded||this._errors<2)return;
+     if(this._retryTimer)return;
+     this._retryTimer=setTimeout(()=>{
+      this._retryTimer=null;
+      if(this._inner===inner&&v===this._version&&!this._loaded){
+       this._stage++;this._draw(v);
+      }
+     },450);
+    });
+    inner.addTo(map);
    },
    onRemove:function(map){
-    this._version++;clearTimeout(this._timer);
-    map.off("moveend zoomend resize",this._schedule,this);
-    for(const ref of [this._pending,this._current,this._fallback]){
-     if(ref&&map.hasLayer(ref))map.removeLayer(ref);
-    }
-    this._pending=null;this._current=null;this._fallback=null;this._map=null;
+    this._version++;clearTimeout(this._retryTimer);this._retryTimer=null;
+    if(this._inner&&map.hasLayer(this._inner))map.removeLayer(this._inner);
+    this._inner=null;this._map=null;
    },
-   _schedule:function(immediate){
-    clearTimeout(this._timer);
-    this._timer=setTimeout(()=>this._refresh(),immediate===true?0:145);
-   },
-   _refresh:async function(){
-    const map=this._map;if(!map)return;
-    const version=++this._version;
-    const bounds=map.getBounds(),size=map.getSize();
-    if(!size.x||!size.y)return;
-    let layers;
-    try{
-     const info=await capabilities(url);
-     if(version!==this._version||this._map!==map)return;
-     layers=selectedWmsLayers(url,info,options.layerName).map(l=>l.name);
-    }catch(e){if(!this._warned){this._warned=true;onError?.("Luftbild-Dienst: "+e.message);}return;}
-    const scale=Math.min(1,1800/Math.max(size.x,size.y));
-    const px=L.point(Math.max(1,Math.round(size.x*scale)),Math.max(1,Math.round(size.y*scale)));
-    const request=url+"?"+wmsImage(layers,bounds,L,px).toString();
-    if(this._pending&&map.hasLayer(this._pending))map.removeLayer(this._pending);
-    const pending=L.imageOverlay(request,bounds,{opacity:this._opacity,interactive:false});
-    this._pending=pending;
-    let settled=false;
-    const timeout=setTimeout(()=>finalize(false),18000);
-    const finalize=(ok)=>{
-      if(settled)return;settled=true;clearTimeout(timeout);
-      pending.off("load",loaded);pending.off("error",failed);
-      if(version!==this._version||this._map!==map){
-       if(map.hasLayer(pending))map.removeLayer(pending);
-       return;
-      }
-      if(!ok){
-       if(map.hasLayer(pending))map.removeLayer(pending);
-       if(this._pending===pending)this._pending=null;
-       // If the large GetMap image fails, try conventional WMS tiles
-       // with the exact photographic raster layer, rather than showing nothing.
-       if(!this._fallback){
-         try{
-           const back=L.tileLayer.wms(url,{
-             layers:layers.join(","),format:"image/png",transparent:true,
-             version:"1.1.1",tileSize:512,minZoom:2,maxZoom:19,
-             updateWhenIdle:true,updateWhenZooming:false,keepBuffer:1,
-             noWrap:true,opacity:this._opacity
-           });
-           back.on("tileerror",()=>{
-             if(!this._warned){
-               this._warned=true;
-               onError?.("Der amtliche Luftbilddienst liefert auch einzelne Bilder nur teilweise. Prüfe bitte den Originaldienst.");
-             }
-           });
-           this._fallback=back;back.addTo(map);
-           if(this._current&&map.hasLayer(this._current))
-             map.removeLayer(this._current);
-         }catch(e){
-           if(!this._warned){this._warned=true;onError?.("Luftbildmosaik konnte nicht geladen werden: "+e.message);}
-         }
-       }
-       return;
-      }
-      if(this._fallback&&map.hasLayer(this._fallback))map.removeLayer(this._fallback);
-      this._fallback=null;
-      const old=this._current;this._current=pending;this._pending=null;
-      if(old&&old!==pending&&map.hasLayer(old))map.removeLayer(old);
-    };
-    const loaded=()=>finalize(true),failed=()=>finalize(false);
-    pending.once("load",loaded);
-    pending.once("error",failed);
-    pending.addTo(map);
-   },
-   setOpacity:function(v){
-    this._opacity=Math.max(0,Math.min(1,Number(v)));
-    this._current?.setOpacity(this._opacity);
-    this._pending?.setOpacity(this._opacity);
-    this._fallback?.setOpacity(this._opacity);
-    return this;
+   setOpacity:function(value){
+    this._opacity=Math.max(0,Math.min(1,Number(value)));
+    this._inner?.setOpacity(this._opacity);return this;
    },
    getOpacity:function(){return this._opacity;}
   });
-  return new ViewWMS();
+  return new PhotoWMS();
  }
  const NativeWMS=L.Layer.extend({
   initialize:function(){this._map=null;this._inner=null;this._version=0;this._opacity=1;this._warned=false;},
