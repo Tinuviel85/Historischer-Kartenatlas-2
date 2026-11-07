@@ -590,32 +590,89 @@
     histoNote.innerHTML='HistoMap Berlin eignet sich für <strong>grundstücks- und blattgenaue Detailrecherchen</strong>, nicht für einheitliche Gesamtberliner Jahrgänge. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">HistoMap im Original öffnen ↗</a>';
     // HistoMap explanation remains available, but does not create
     // historically inaccurate uniform city-wide year maps.
-    // Recherche in weiteren realen historischen Kartensammlungen.
-    // Externe Portale liefern nicht automatisch eine einbindbare Tile-URL:
-    // deshalb keine falschen Vorschau- oder Speichern-Schaltflaechen.
-    const historicCollections=[
-      {name:"OldMapsOnline",url:"https://www.oldmapsonline.org/",focus:"Historische Karten weltweit"},
-      {name:"David Rumsey Map Collection",url:"https://www.davidrumsey.com/",focus:"Weltweite historische Kartensammlung"},
-      {name:"Arcanum Maps",url:"https://maps.arcanum.com/de/",focus:"Historische Karten Europas"},
-      {name:"SLUB Dresden · Kartenforum",url:"https://www.slub-dresden.de/entdecken/karten",focus:"Deutschland, Sachsen und Europa"},
-      {name:"National Library of Scotland",url:"https://data.nls.uk/tools/maps-and-tools/",focus:"Großbritannien und historische Ordnance-Survey-Karten"},
-      {name:"USGS topoView",url:"https://www.usgs.gov/tools/topoview",focus:"Historische topografische Karten der USA"},
-      {name:"IGN · Remonter le Temps",url:"https://remonterletemps.ign.fr/",focus:"Historische Karten und Luftbilder Frankreichs"},
-      {name:"swisstopo · Zeitreise",url:"https://map.geo.admin.ch/",focus:"Historische Landeskarten der Schweiz"},
-      {name:"Austrian Map · histMap",url:"https://maps.bev.gv.at/",focus:"Historische Karten Österreichs"},
-      {name:"Historic.Place",url:"https://wiki.historic.place/doku.php?id=de:karten",focus:"Georeferenzierte historische Karten und Kacheldienste"}
+    // Nur dokumentierte, georeferenzierte XYZ-Karten ohne Bezahlschranke.
+    // Die Inhalte werden nicht vorinstalliert. Jede Karte bleibt eine
+    // ungespeicherte Vorschau, bis der Nutzer "Karte speichern" waehlt.
+    // Kachelquelle, Lizenz und Urheber sind auf Historic.Place dokumentiert.
+    const freeHistoricalMaps=[
+      {
+        name:"Sitzenrodaer Forstrevier 1780",year:1780,region:"Sitzenroda",
+        sourceUrl:"https://tiles.historic.place/region/Sitzenrodaer-Forst_1780/{z}/{x}/{y}.png",
+        detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",
+        provider:"SLUB Dresden / Historic.Place",license:"CC0 1.0",licenceUrl:"https://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      {
+        name:"Schmettausches Kartenwerk Brandenburg 1767–1787",year:1787,region:"Brandenburg",
+        sourceUrl:"https://tiles.historic.place/region/Schmettau-1787/{z}/{x}/{y}.png",
+        detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",
+        provider:"LGB Brandenburg, Staatsbibliothek zu Berlin / Historic.Place",license:"dl-de/by-2.0",licenceUrl:"https://www.govdata.de/dl-de/by-2-0"
+      },
+      {
+        name:"Industriekarte der Region Paris 1927",year:1927,region:"Paris",
+        sourceUrl:"https://mapwarper.net/mosaics/tile/867/{z}/{x}/{y}.png",
+        detailUrl:"https://mapwarper.net/layers/867",
+        provider:"Bibliothèque nationale de France / MapWarper",license:"Licence Ouverte 2.0",licenceUrl:"https://www.etalab.gouv.fr/licence-ouverte-open-licence/"
+      },
+      {
+        name:"Verkehrskarte Magdeburg 1922",year:1922,region:"Magdeburg",
+        sourceUrl:"https://tiles.historic.place/region/Verkehrskarte_Magdeburg_1922/{z}/{x}/{y}.png",
+        detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",
+        provider:"Hans Ravenstein / Historic.Place",license:"Public Domain",licenceUrl:"https://commons.wikimedia.org/wiki/File:Neue_Spezial-_und_Verkehrskarte_f%C3%BCr_den_Regierungsbezirk_Magdeburg.jpg"
+      },
+      {
+        name:"Atlas Tyrolensis 1774",year:1774,region:"Tirol",
+        sourceUrl:"https://tiles.historic.place/region/Atlas_Tyrolensis/{z}/{x}/{y}.png",
+        detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",
+        provider:"Tiroler Landesarchiv / Historic.Place",license:"Public Domain",licenceUrl:"https://commons.wikimedia.org/wiki/File:Atlas_Tyrolensis-small.jpg"
+      },
+      {
+        name:"Großherzogtum Baden 1839",year:1839,region:"Baden-Württemberg",
+        sourceUrl:"https://tiles.historic.place/region/Herzogtum_Baden/{z}/{x}/{y}.png",
+        detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",
+        provider:"Universitätsbibliothek Heidelberg / Historic.Place",license:"CC BY-SA 3.0 DE",licenceUrl:"https://creativecommons.org/licenses/by-sa/3.0/de/"
+      },
+      {
+        name:"Sächsische Kantoneinteilung 1814",year:1814,region:"Sachsen",
+        sourceUrl:"https://tiles.historic.place/region/Saechsische_Kantoneinteilung_(1814)/{z}/{x}/{y}.png",
+        detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",
+        provider:"Wikimedia Commons / Historic.Place",license:"Public Domain",licenceUrl:"https://wiki.historic.place/doku.php?id=de:karten"
+      },
+      {
+        name:"Königreich Sachsen 1857",year:1857,region:"Sachsen",
+        sourceUrl:"https://tiles.historic.place/region/Sachsen_1857/{z}/{x}/{y}.png",
+        detailUrl:"https://wiki.historic.place/doku.php?id=de:karten",
+        provider:"Leibniz-Institut für Länderkunde / Historic.Place",license:"CC0 1.0",licenceUrl:"https://creativecommons.org/publicdomain/zero/1.0/"
+      }
     ];
-    const archivePanel=disclosure("managerHistoricalCollectionsProvider","Weitere historische Kartensammlungen");
+    const archivePanel=disclosure("managerHistoricalCollectionsProvider","Kostenlose georeferenzierte Karten");
     const archiveWrap=node("div","manager-results");
-    archiveWrap.style.cssText="max-height:none;overflow:visible;margin:12px";
-    for(const provider of historicCollections){
+    archiveWrap.style.cssText="max-height:50dvh;overflow:auto;margin:12px";
+    for(const item of freeHistoricalMaps){
       const row=node("div","manager-result");
       const info=node("div");
-      info.append(node("strong","",provider.name),node("small","",provider.focus));
-      const link=node("a","manager-action","Karten suchen");
-      link.href=provider.url;link.target="_blank";link.rel="noopener noreferrer";
-      link.style.cssText="white-space:nowrap;text-decoration:none;flex:none";
-      row.append(info,link);archiveWrap.appendChild(row);
+      info.style.minWidth="0";
+      info.appendChild(node("strong","",item.name));
+      const license=node("small","",item.year+" · "+item.region+" · kostenlos · "+item.license);
+      info.appendChild(license);
+      const source=node("a","manager-label","Lizenz und Kartendienst");
+      source.href=item.detailUrl;
+      source.target="_blank";source.rel="noopener noreferrer";
+      source.style.cssText="display:inline-block;font-size:11px;margin-top:5px;text-decoration:underline";
+      info.appendChild(source);
+      const button=node("button","manager-action manager-primary","Auf Karte legen");
+      button.type="button";
+      button.style.cssText="white-space:nowrap;flex:none";
+      button.addEventListener("click",()=>{
+        try{
+          previewDiscoveredMap({
+            name:item.name,year:item.year,region:item.region,
+            provider:item.provider+" · "+item.license,
+            type:"xyz",sourceUrl:item.sourceUrl,detailUrl:item.detailUrl
+          });
+        }catch(e){api.setNotice("Vorschau nicht möglich: "+e.message,3000);}
+      });
+      row.append(info,button);
+      archiveWrap.appendChild(row);
     }
     archivePanel.appendChild(archiveWrap);
     discover.insertBefore(archivePanel,manualPanel);
