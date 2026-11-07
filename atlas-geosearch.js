@@ -293,6 +293,8 @@ function mount({parent,maps,preview,capabilities,services=[]}){
        const name=layers.length===1?view.service.title:view.service.title+" · "+(layer.title||layer.name);
        const item={name:name.slice(0,210),year:yearOf(name),region:"Berlin",
          sourceUrl:view.service.url,type:"geoportal",layerName:layer.name,
+         bounds:Array.isArray(layer.box)&&layer.box.length===4
+           ?[[layer.box[1],layer.box[0]],[layer.box[3],layer.box[2]]]:null,
          detailUrl:"https://gdi.berlin.de/view/"+view.service.url.split("/").pop(),
          provider:"Geoportal Berlin / Land Berlin"};
        try{preview(item);}catch(e){setStatus("Vorschau konnte nicht geöffnet werden: "+e.message);}
