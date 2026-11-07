@@ -390,18 +390,52 @@ function mount({parent,maps,preview,capabilities,services=[]}){
   official.textContent=view.state?"Amtliches Geoportal "+view.state.name+" öffnen":"Geoportale der Bundesländer öffnen";
   urlForm.hidden=!(view.state?.code==="BE");
   if(view.level==="root"){
-   for(const state of STATES){
+   for(const state of STATES)
     addButton(state.name,()=>push({level:"state",title:state.name,state}));
-   }
   }else if(view.level==="state"){
-   // Wie im amtlichen Geoportal: zuerst die Kartensparte Fachkarten,
-   // danach die 16 ISO-Themenkategorien ohne frei erfundene Untergruppen.
-   addButton("Fachkarten",()=>push({level:"topics",title:"Fachkarten",state:view.state}));
-  }else if(view.level==="topics"){
-   for(const topic of TOPICS){
-    addButton(topic.label,()=>push({level:"services",title:topic.label,
-     state:view.state,category:topic.code,query:"",preset:[]}));
+   if(view.state.code==="BE"){
+    addButton("Fachkarten",()=>push({level:"topics",title:"Fachkarten",state:view.state}));
+   }else if(view.state.code==="BY"){
+    addButton("BayernAtlas · Themen",()=>push({level:"by-themes",title:"BayernAtlas",state:view.state}));
+    addButton("Amtliche Kartendienste",()=>push({level:"native-services",title:"Kartendienste Bayern",state:view.state,theme:""}));
+   }else{
+    const nav=LAND_NAV[view.state.code];
+    addButton(nav?.entry||"Kartendienste",()=>push({
+     level:"native-topics",title:nav?.entry||"Kartendienste",state:view.state
+    }));
+    addButton("Amtliche Kartendienste suchen",()=>push({
+     level:"services",title:"Kartendienstsuche",state:view.state,query:"",preset:[]
+    }));
    }
+  }else if(view.level==="topics"){
+   for(const topic of TOPICS)
+    addButton(topic.label,()=>push({
+     level:"services",title:topic.label,state:view.state,
+     category:topic.code,query:"",preset:[]
+    }));
+  }else if(view.level==="by-themes"){
+   for(const theme of BAYERN_THEMES)
+    addButton(theme,()=>push({level:"native-services",title:theme,state:view.state,theme}));
+  }else if(view.level==="native-topics"){
+   const nav=LAND_NAV[view.state.code];
+   if(nav?.groups?.length){
+    for(const topic of nav.groups)
+     addButton(topic,()=>push({level:"services",title:topic,state:view.state,query:topic,preset:[]}));
+   }else setStatus("Dieses Landesportal hat keinen einheitlich dokumentierten Fachkarten-Themenbaum. Die Original-Kartensuche ist unten verlinkt.");
+   addButton("Alle amtlichen Kartendienste suchen",()=>push({
+    level:"services",title:"Kartendienstsuche",state:view.state,query:"",preset:[]
+   }));
+  }else if(view.level==="native-services"){
+   const found=[];
+   if(!view.theme||view.theme==="Geobasisdaten")found.push(BAYERN_MAPSERVICE);
+   for(const svc of BAYERN_SERVICES)
+    if(!view.theme||svc.theme===view.theme)found.push(svc);
+   for(const svc of found)showService(svc);
+   setStatus(found.length+" amtlich dokumentierte Kartendienste in diesem Themenbereich.");
+   if(!found.length)setStatus("Für dieses BayernAtlas-Thema sind noch keine direkt geprüften WMS-Adressen hinterlegt. Das Originalportal ist unten verlinkt.");
+   addButton("Weitere Dienste im amtlichen Katalog suchen",()=>push({
+    level:"services",title:"Weitere Geodienste",state:view.state,query:view.theme||"",preset:[]
+   }));
   }else if(view.level==="services"){
    searchPosition=1;selectedQuery=view.query;serviceSeen=new Set();resultsCount=0;
    setStatus("Amtliche Kartendienste werden ermittelt …");
