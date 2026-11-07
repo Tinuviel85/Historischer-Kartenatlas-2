@@ -590,6 +590,35 @@
     histoNote.innerHTML='HistoMap Berlin eignet sich für <strong>grundstücks- und blattgenaue Detailrecherchen</strong>, nicht für einheitliche Gesamtberliner Jahrgänge. <a href="https://histomapberlin.de/" target="_blank" rel="noopener noreferrer">HistoMap im Original öffnen ↗</a>';
     // HistoMap explanation remains available, but does not create
     // historically inaccurate uniform city-wide year maps.
+    // Recherche in weiteren realen historischen Kartensammlungen.
+    // Externe Portale liefern nicht automatisch eine einbindbare Tile-URL:
+    // deshalb keine falschen Vorschau- oder Speichern-Schaltflaechen.
+    const historicCollections=[
+      {name:"OldMapsOnline",url:"https://www.oldmapsonline.org/",focus:"Historische Karten weltweit"},
+      {name:"David Rumsey Map Collection",url:"https://www.davidrumsey.com/",focus:"Weltweite historische Kartensammlung"},
+      {name:"Arcanum Maps",url:"https://maps.arcanum.com/de/",focus:"Historische Karten Europas"},
+      {name:"SLUB Dresden · Kartenforum",url:"https://www.slub-dresden.de/entdecken/karten",focus:"Deutschland, Sachsen und Europa"},
+      {name:"National Library of Scotland",url:"https://data.nls.uk/tools/maps-and-tools/",focus:"Großbritannien und historische Ordnance-Survey-Karten"},
+      {name:"USGS topoView",url:"https://www.usgs.gov/tools/topoview",focus:"Historische topografische Karten der USA"},
+      {name:"IGN · Remonter le Temps",url:"https://remonterletemps.ign.fr/",focus:"Historische Karten und Luftbilder Frankreichs"},
+      {name:"swisstopo · Zeitreise",url:"https://map.geo.admin.ch/",focus:"Historische Landeskarten der Schweiz"},
+      {name:"Austrian Map · histMap",url:"https://maps.bev.gv.at/",focus:"Historische Karten Österreichs"},
+      {name:"Historic.Place",url:"https://wiki.historic.place/doku.php?id=de:karten",focus:"Georeferenzierte historische Karten und Kacheldienste"}
+    ];
+    const archivePanel=disclosure("managerHistoricalCollectionsProvider","Weitere historische Kartensammlungen");
+    const archiveWrap=node("div","manager-results");
+    archiveWrap.style.cssText="max-height:none;overflow:visible;margin:12px";
+    for(const provider of historicCollections){
+      const row=node("div","manager-result");
+      const info=node("div");
+      info.append(node("strong","",provider.name),node("small","",provider.focus));
+      const link=node("a","manager-action","Karten suchen");
+      link.href=provider.url;link.target="_blank";link.rel="noopener noreferrer";
+      link.style.cssText="white-space:nowrap;text-decoration:none;flex:none";
+      row.append(info,link);archiveWrap.appendChild(row);
+    }
+    archivePanel.appendChild(archiveWrap);
+    discover.insertBefore(archivePanel,manualPanel);
     const histoPanel=disclosure("managerHistoMapInfoProvider","HistoMap Berlin · Detailrecherche");
     histoPanel.appendChild(histoNote);
     discover.appendChild(histoPanel);
