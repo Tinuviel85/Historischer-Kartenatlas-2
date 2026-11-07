@@ -518,8 +518,18 @@
           const remap=list=>[...new Set((Array.isArray(list)?list:[])
             .filter(Number.isInteger).map(id=>newIds.get(id))
             .filter(Number.isInteger))];
-          const localFavorites=JSON.parse(localStorage.getItem('historischer-atlas-favoriten')||'[]');
+          let localFavorites=data.favorites;
+          try{localFavorites=JSON.parse(localStorage.getItem('historischer-atlas-favoriten')||'[]');}
+          catch(_){/* Ungueltige Favoritenliste darf die Migration nicht abbrechen. */}
           const favorites=remap(Array.isArray(localFavorites)?localFavorites:data.favorites);
+          const shared=new URLSearchParams(location.hash.replace(/^#/,''));
+          if(shared.has('karte')){
+            const oldId=Number(shared.get('karte'));
+            if(newIds.has(oldId))shared.set('karte',String(newIds.get(oldId)));
+            else shared.delete('karte');
+            history.replaceState(history.state,'',location.pathname+location.search+
+              (shared.toString()?'#'+shared.toString():''));
+          }
           data.custom=retained;
           data.hidden=remap(data.hidden);
           data.favorites=favorites;
@@ -1227,20 +1237,21 @@
       });
       function restoreFromHash(){
         const p=new URLSearchParams(location.hash.replace(/^#/,''));
-        const id=p.has('karte')?Number(p.get('karte')):0;
-        const validId=Number.isInteger(id)&&id>=0&&id<maps.length&&!maps[id].hidden?id:(maps.find(m=>m&&!m.hidden)?.id??0);
+        const id=p.has('karte')?Number(p.get('karte')):null;
+        const validId=Number.isInteger(id)&&id>=0&&id<maps.length&&!maps[id].hidden?id:null;
         const lat=Number(p.get('lat')),lon=Number(p.get('lon')),zoom=Number(p.get('zoom'));
         const validView=p.has('lat')&&p.has('lon')&&p.has('zoom')&&Number.isFinite(lat)&&Number.isFinite(lon)&&Number.isFinite(zoom)&&Math.abs(lat)<=90&&Math.abs(lon)<=180&&zoom>=2&&zoom<=19;
         if(validView)map.setView([lat,lon],zoom,{animate:false});
         if(p.has('deckkraft')){const n=Number(p.get('deckkraft'));if(Number.isFinite(n)&&n>=0&&n<=100){opacity=n/100;$('opacityRange').value=String(n);}}
         if(p.has('teilung')){const n=Number(p.get('teilung'));if(Number.isFinite(n))setSplit(n/100);}
-        if(p.has('karte'))selectMap(validId,{restoreView:validView});
+        if(validId!==null)selectMap(validId,{restoreView:validView});
         else updateTimeline();
         setMode(active&&p.get('modus')==='compare'?'compare':'overlay');
       }
       window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,previewMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
       $('compareMode').disabled=true;
       renderRegions();
+      renderList();
       restoreFromHash();
       // Bei Browserzurück/-vor wird der geteilte Kartenausschnitt erneut hergestellt.
       window.addEventListener('hashchange',restoreFromHash);
