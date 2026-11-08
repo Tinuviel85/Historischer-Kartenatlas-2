@@ -379,7 +379,7 @@ function mount(api){
     dragState=null;
    }
    const down=e=>{
-    if((e.pointerType==="mouse"&&e.button!==0)||!mainSession)return;
+    if((e.pointerType==="mouse"&&e.button!==0)||!mainSession||mainSession.moveMode!=="image")return;
     if(e.target.closest?.("button,input,label,select,a,.leaflet-control"))return;
     pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(pointers.size===1){
@@ -391,7 +391,7 @@ function mount(api){
     try{container.setPointerCapture(e.pointerId);}catch(_){}
    };
    const move=e=>{
-    if(!pointers.has(e.pointerId)||!mainSession)return;
+    if(!pointers.has(e.pointerId)||!mainSession||mainSession.moveMode!=="image")return;
     pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     e.preventDefault();
     if(pointers.size>=2&&gesture){
@@ -422,16 +422,45 @@ function mount(api){
      dragState={id,x:p.x,y:p.y,cx:cp.x,cy:cp.y};
     }
    };
+   const switchMovement=kind=>{
+    if(!mainSession)return;
+    const background=kind==="background";
+    for(const id of pointers.keys()){
+     try{if(container.hasPointerCapture(id))container.releasePointerCapture(id);}catch(_){}
+    }
+    pointers.clear();dragState=null;gesture=null;
+    mainSession.moveMode=background?"background":"image";
+    if(background){
+     map.dragging?.enable();
+     map.touchZoom?.enable();
+     if(mainSession.wasScrollZoom)map.scrollWheelZoom?.enable();
+    }else{
+     map.dragging?.disable();
+     map.touchZoom?.disable();
+     map.scrollWheelZoom?.disable();
+    }
+    $("grMoveImage").setAttribute("aria-pressed",String(!background));
+    $("grMoveBackground").setAttribute("aria-pressed",String(background));
+    $("grMapHelp").textContent=background?
+     "Berlin-Karte bewegen: die Grundkarte mit einem Finger verschieben, mit zwei Fingern zoomen. Das historische Bild bleibt geografisch ausgerichtet. Zum Bildwechsel oben umschalten.":
+     "Historische Karte bewegen: mit einem Finger verschieben und mit zwei Fingern drehen oder skalieren. Die Berlin-Karte bleibt dabei stehen.";
+    $("grMainStatus").textContent=background?
+     "Hintergrundkarte kann jetzt frei bewegt werden; für das historische Bild wieder umschalten.":
+     "Historische Karte kann jetzt verschoben und gedreht werden.";
+    if(background)stage.classList.add("gr-move-map");
+    else stage.classList.remove("gr-move-map");
+   };
    const keydown=e=>{
     if(e.key==="Escape"&&mainSession){e.preventDefault();endMainAlignment(true);}
    };
    mainSession={map,container,url,down,move,up,keydown,oldCenter,oldZoom,
     historical,visibility:historical?.style.visibility||"",
     wasDragging:!!map.dragging?.enabled?.(),
-    wasTouchZoom:!!map.touchZoom?.enabled?.()};
+    wasTouchZoom:!!map.touchZoom?.enabled?.(),
+    wasScrollZoom:!!map.scrollWheelZoom?.enabled?.(),
+    moveMode:"image",setMoveMode:switchMovement};
    if(historical)historical.style.visibility="hidden";
-   if(mainSession.wasDragging)map.dragging.disable();
-   if(mainSession.wasTouchZoom)map.touchZoom.disable();
+   switchMovement("image");
    container.addEventListener("pointerdown",down);
    container.addEventListener("pointermove",move);
    container.addEventListener("pointerup",up);
@@ -451,6 +480,8 @@ function mount(api){
   }
  }
  $("grOnMain").onclick=startMainAlignment;
+ $("grMoveImage").onclick=()=>mainSession?.setMoveMode("image");
+ $("grMoveBackground").onclick=()=>mainSession?.setMoveMode("background");
  $("grMainSize").oninput=()=>{
   if(!mainSession)return;
   manual.scale=manual.baseScale*Math.pow(2,Number($("grMainSize").value)/100);
