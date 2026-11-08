@@ -93,6 +93,7 @@ function mount(api){
  const $=id=>document.getElementById(id);
  const style=document.createElement("style");
  style.textContent=".gr-dialog{width:min(1030px,calc(100vw - 16px));max-height:96dvh;overflow:auto;border:1px solid #c6d9cc;border-radius:16px;padding:16px;color:#254237;background:#fff}.gr-dialog::backdrop{background:#12362899}.gr-dialog button{border:1px solid #bdd2c3;border-radius:9px;background:#f5faf6;color:#284c3d;font-weight:700;padding:10px}.gr-fields{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}.gr-fields label{display:grid;gap:5px;font-size:12px;font-weight:700;flex:1}.gr-fields input{padding:10px;border-radius:9px;border:1px solid #c5d7c8;min-width:95px}.gr-views{display:flex;flex-direction:column;gap:10px}.gr-views>div{min-width:0;border:1px solid #cddbd0;border-radius:10px;overflow:hidden}.gr-views h3{font-size:13px;padding:9px;margin:0}.gr-pic{height:315px;display:flex;justify-content:center;align-items:center;background:#e6eee6;overflow:auto}.gr-pic canvas{max-width:100%;height:auto;cursor:crosshair;touch-action:manipulation}.gr-ref{height:360px;touch-action:none}.gr-actions{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}.gr-status,.gr-points{font-size:12px;color:#496656;margin:10px 0}.gr-point{display:flex;gap:8px;justify-content:space-between;padding:5px;border-bottom:1px solid #e1e9e1}.gr-pin{background:#bd2947;color:#fff;border:2px solid white;border-radius:50%;display:grid;place-items:center;font:700 12px system-ui;box-shadow:0 1px 5px #0006;width:25px;height:25px}.gr-modes{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}.gr-modes button[aria-pressed=true]{background:#235643;color:white}.gr-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:12px;background:#eef5ef;border-radius:10px;margin-bottom:12px}.gr-controls label{font-size:12px;font-weight:700;display:grid;gap:5px}.gr-controls output{font-weight:400}.gr-controls input{width:100%;accent-color:#235643}.gr-manual-note{font-size:12px;grid-column:1/-1;color:#526c5c;line-height:1.5}.gr-launch{width:100%;border:1px solid #b3d1bd;background:#e8f4ea;border-radius:10px;color:#225241;padding:12px;font-weight:700;margin:9px 0}@media(max-width:650px){.gr-views>div{margin:8px 0}.gr-pic,.gr-ref{height:34dvh}.gr-fields label:first-child{flex-basis:100%}.gr-controls{grid-template-columns:1fr 1fr}.gr-controls label:last-of-type{grid-column:1/-1}}";
+ style.textContent += ".gr-stage-image{position:absolute;z-index:800;max-width:none!important;max-height:none!important;pointer-events:none;user-select:none;-webkit-user-drag:none;transform-origin:center center;will-change:transform,left,top,width}.gr-stage-editor{position:absolute;z-index:1150;left:50%;bottom:calc(42px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(720px,calc(100% - 18px));background:#fffffffa;box-shadow:0 9px 35px #173d2e66;border:1px solid #bdd5c3;border-radius:15px;padding:13px;display:grid;gap:9px;max-height:53dvh;overflow:auto;touch-action:pan-y}.gr-stage-editor h3{font:700 17px Georgia,serif;margin:0}.gr-stage-editor p{font-size:12px;color:#587362;margin:0;line-height:1.45}.gr-stage-editor .gr-sliders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.gr-stage-editor label{display:grid;gap:4px;font-size:12px;font-weight:700}.gr-stage-editor input{width:100%;accent-color:#225644}.gr-stage-editor .gr-toolbar-buttons{display:flex;flex-wrap:wrap;gap:7px}.gr-stage-editor button{border:1px solid #b9d0c2;border-radius:9px;background:#f6faf7;color:#244d3b;font-size:13px;font-weight:700;padding:10px 12px;min-height:41px}.gr-stage-editor .gr-confirm{background:#235543;color:#fff;border-color:#235543}.gr-stage-editor .gr-cancel{background:#fff}.stage.gr-aligning .mode-panel,.stage.gr-aligning .map-bottom,.stage.gr-aligning .map-topbar,.stage.gr-aligning .atlas-preview-bar,.stage.gr-aligning .detail-card,.stage.gr-aligning .zoom-panel{visibility:hidden!important}.stage.gr-aligning #map{touch-action:none!important}@media(max-width:650px){.gr-stage-editor{bottom:calc(30px + env(safe-area-inset-bottom));padding:10px;gap:8px}.gr-stage-editor .gr-sliders{grid-template-columns:1fr 1fr;gap:8px}.gr-stage-editor .gr-sliders label:nth-child(3){grid-column:1/-1}.gr-stage-editor button{padding:10px 11px}}";
  document.head.appendChild(style);
  const btn=document.createElement("button");btn.className="gr-launch";btn.textContent="+ Eigene Karte georeferenzieren";
  const target=$("managerDialog")?.querySelector("#managerDiscover");
@@ -103,15 +104,19 @@ function mount(api){
  '<div class="gr-fields"><label>Kartenname<input id="grName" placeholder="Historische Karte"></label><label>Region<input id="grRegion" value="Berlin"></label><label>Jahr<input id="grYear" type="number" min="1" max="2100"></label><label style="flex-basis:100%">PNG, JPG, WebP oder PDF (erste Seite)<input id="grFile" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"></label></div>'+
  '<div class="gr-modes"><button id="grModePoints" type="button" aria-pressed="true">Passpunkte setzen</button><button id="grModeManual" type="button" aria-pressed="false">Manuell überlagern</button></div>'+
  '<div class="gr-controls" id="grControls" hidden><p class="gr-manual-note">Die historische Karte liegt halbtransparent auf der heutigen Karte. Bild direkt unten ziehen; Größe und Drehung hier anpassen. Keine Passpunkte erforderlich.</p><label>Größe <output id="grScaleLabel">100 %</output><input id="grScale" type="range" min="10" max="400" value="100" step="1"></label><label>Drehung <output id="grRotateLabel">0°</output><input id="grRotate" type="range" min="-180" max="180" value="0" step="1"></label><label>Deckkraft <output id="grOpacityLabel">55 %</output><input id="grOpacity" type="range" min="5" max="100" value="55" step="1"></label><button id="grResetManual" type="button">Bild neu zentrieren</button></div>'+
- '<div class="gr-views"><div><h3>1 · Historischer Scan</h3><div class="gr-pic"><canvas id="grImage" width="600" height="350"></canvas></div></div><div><h3>2 · Heutige Referenzkarte</h3><div id="grReference" class="gr-ref"></div></div></div>'+
+ '<div id="grManualHelp" hidden style="margin:12px 0;padding:13px;border-radius:10px;background:#edf5ef"><strong>Direkt auf der großen Berlin-Karte ausrichten</strong><p style="font-size:12px;line-height:1.55">Nach dem Laden des Bildes öffnest du die Berlin-Karte. Dort kannst du die historische Karte mit dem Finger verschieben, ihre Größe und Drehung ändern und die Ausrichtung mit einem einzigen Knopf bestätigen. Passpunkte sind dafür nicht nötig.</p><button id="grOnMain" type="button" style="background:#245845;color:white">Auf Berlin-Karte ausrichten</button></div>'+
+ '<div class="gr-views" id="grViews"><div><h3>1 · Historischer Scan</h3><div class="gr-pic"><canvas id="grImage" width="600" height="350"></canvas></div></div><div><h3>2 · Heutige Referenzkarte</h3><div id="grReference" class="gr-ref"></div></div></div>'+
  '<p id="grStatus" class="gr-status" role="status">Bild auswählen, dann Passpunkte setzen.</p><div id="grPoints" class="gr-points"></div>'+
  '<div class="gr-actions"><button id="grPreview" type="button">Auf Karte legen (Vorschau)</button><button id="grSave" type="button">Karte speichern</button><button id="grExport" type="button">Projekt exportieren</button><button id="grImport" type="button">Projekt importieren</button><button id="grClear" type="button">Punkte zurücksetzen</button></div><input id="grImportFile" type="file" accept=".json,application/json" hidden>'+
  '<div style="border-top:1px solid #d6e6d9;padding-top:10px"><strong>Gespeicherte lokale Projekte</strong><div id="grProjects"></div></div>'+
  '<p class="gr-status">Derzeit lokale Speicherung im Browser (IndexedDB). Die spätere OneDrive-Synchronisierung benötigt eine Microsoft-App-Registrierung. Bitte Projekte auch als Datei sichern.</p>';
  document.body.appendChild(dialog);
  const L=window.L,canvas=$("grImage"),ctx=canvas.getContext("2d");
+ const stage=document.querySelector(".stage");
+ if(!stage)throw Error("Kartenbereich nicht gefunden.");
  let ref=null,markers=[],photo=null,img=null,w=0,h=0,points=[],pending=null,id=null;
  let mode="points",manual=null,manualLayer=null,drag=null,frame=null;
+ let mainSession=null;
  const opacity=()=>Math.min(1,Math.max(.05,Number($("grOpacity").value)/100));
  const say=x=>{$("grStatus").textContent=x};
  function draw(){
@@ -195,24 +200,21 @@ function mount(api){
   pending=null;draw();renderPoints();
   $("grModePoints").setAttribute("aria-pressed",String(mode==="points"));
   $("grModeManual").setAttribute("aria-pressed",String(mode==="manual"));
-  $("grControls").hidden=mode!=="manual";
+  $("grControls").hidden=true; // Die Regler befinden sich bei der manuellen Ausrichtung direkt auf der Berlin-Karte.
+  $("grViews").hidden=mode==="manual";
+  $("grManualHelp").hidden=mode!=="manual";
   $("grClear").hidden=mode==="manual";
-  if(mode==="manual"){
-   ensureManual();
-   if(manual){
-    $("grScale").value=String(Math.max(10,Math.min(400,Math.round(100*manual.scale/manual.baseScale)||100)));
-    $("grRotate").value=String(Number(manual.rotation)||0);
-    $("grOpacity").value=String(Math.round((manual.opacity??.55)*100));
-   }
-   if(ref){ref.dragging.disable();ref.getContainer().style.touchAction="none";}
-   renderManual();
-   say(img?"Historisches Bild unten direkt verschieben. Größe, Drehung und Transparenz oben einstellen.":"Bitte zuerst eine Karte laden.");
-  }else{
-   if(ref){ref.dragging.enable();ref.getContainer().style.touchAction="";}
-   if(manualLayer&&ref?.hasLayer(manualLayer))ref.removeLayer(manualLayer);
-   manualLayer=null;
-   say(img?"Passpunkt auf der oberen Karte wählen, danach denselben Ort unten.":"Bitte zuerst eine Karte laden.");
+  $("grPreview").hidden=mode==="manual";
+  $("grSave").hidden=mode==="manual";
+  if(ref){
+   ref.dragging.enable();
+   if(manualLayer&&ref.hasLayer(manualLayer))ref.removeLayer(manualLayer);
   }
+  manualLayer=null;
+  say(img?(mode==="manual"?
+   'Bild geladen. „Auf Berlin-Karte ausrichten“ wählen – anschließend dort verschieben, drehen und bestätigen.':
+   'Passpunkt zuerst auf dem historischen Scan, anschließend auf der unteren Karte wählen.'):
+   'Bitte zuerst ein Bild oder eine PDF laden.');
  }
  $("grModePoints").onclick=()=>setMode("points");
  $("grModeManual").onclick=()=>setMode("manual");
@@ -280,8 +282,7 @@ function mount(api){
   const scale=Math.min(850/w,600/h,1);
   canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));
   points=[];id=null;manual=null;pending=null;renderPoints();draw();
-  if(mode==="manual"){ensureManual(true);renderManual();}
-  say("Bild geladen ("+w+" × "+h+"). "+(mode==="manual"?"Jetzt kannst du es unten verschieben.":"Jetzt Passpunkte setzen."));
+  say("Bild geladen ("+w+" × "+h+"). "+(mode==="manual"?"Jetzt „Auf Berlin-Karte ausrichten“ wählen.":"Jetzt Passpunkte setzen."));
  }
  $("grFile").onchange=e=>{read(e.target.files?.[0]).then(()=>{$("grName").value=e.target.files?.[0]?.name.replace(/\.[^.]+$/,"")||""}).catch(er=>say(er.message));};
  function refMap(){
@@ -302,7 +303,7 @@ function mount(api){
    name:$("grName").value.trim()||"Eigene Karte",
    region:$("grRegion").value.trim()||"Berlin",year:Number($("grYear").value)||null,
    image:photo,width:w,height:h,points:points.map(p=>({...p})),
-   mode,manual:mode==="manual"?(ensureManual()?{...manual}:null):null,
+   mode,manual:mode==="manual"?(manual?{...manual}:null):null,
    savedAt:new Date().toISOString()};
   const b=bounds(r,L);
   return {r,b};
