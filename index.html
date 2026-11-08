@@ -420,7 +420,7 @@
   <script src="atlas-geoportal.js?v=20261107-geoportal-berlin-only"></script>
   <script src="atlas-geosearch.js?v=20261107-alkis-scale-and-sachdaten3"></script>
   <script src="atlas-manager.js?v=20261108-update-georef-project-v2"></script>
-  <script src="atlas-georef.js?v=20261108-manual-overlay-drag-rotate-v3"></script>
+  <script src="atlas-georef.js?v=20261108-main-berlin-align-confirm1"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -1419,7 +1419,11 @@
         setMode(active&&p.get('modus')==='compare'?'compare':'overlay');
       }
       window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,previewMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
-      window.atlasGeoRefEditor=window.AtlasGeoRef?.mount({map,previewMap,saveDiscoveredMap:item=>window.atlasManager.saveDiscoveredMap(item),setNotice});
+      window.atlasGeoRefEditor=window.AtlasGeoRef?.mount({
+        map,historicalMap,previewMap,
+        saveDiscoveredMap:item=>window.atlasManager.saveDiscoveredMap(item),
+        suspendAutoFollow,setNotice
+      });
       $('compareMode').disabled=true;
       renderRegions();
       renderList();
