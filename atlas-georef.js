@@ -307,14 +307,17 @@ function mount(api){
   mainImage.style.height=(h*manual.scale*pixelFactor)+"px";
   mainImage.style.transform="translate(-50%,-50%) rotate("+manual.rotation+"deg)";
   mainImage.style.opacity=String(manual.opacity??.55);
-  const factor=Math.round(100*manual.scale/manual.baseScale);
+  const factor=Math.round(1000*manual.scale/manual.baseScale)/10;
   $("grMainSizeValue").textContent=factor+" %";
   $("grMainAngleValue").textContent=Number(manual.rotation||0).toFixed(1).replace(/\.0$/,"")+"°";
   $("grMainOpacityValue").textContent=Math.round(100*(manual.opacity??.55))+" %";
  }
  function syncMainControls(){
+  const percent=Math.round(1000*manual.scale/manual.baseScale)/10;
   $("grMainSize").value=String(Math.max(-400,Math.min(400,Math.round(100*Math.log2(manual.scale/manual.baseScale)))));
+  $("grMainSizeNumber").value=String(percent);
   $("grMainAngle").value=String(Number(manual.rotation)||0);
+  $("grMainAngleNumber").value=String(Math.round(10*(Number(manual.rotation)||0))/10);
   $("grMainOpacity").value=String(Math.round((manual.opacity??.55)*100));
   drawOnMain();
  }
@@ -332,9 +335,14 @@ function mount(api){
   mainImage.hidden=true;mainImage.removeAttribute("src");
   URL.revokeObjectURL(state.url);bar.hidden=true;
   stage.classList.remove("gr-aligning");
+  stage.classList.remove("gr-move-map");
   if(state.historical)state.historical.style.visibility=state.visibility;
   if(state.wasDragging)state.map.dragging.enable();
+  else state.map.dragging.disable();
   if(state.wasTouchZoom)state.map.touchZoom.enable();
+  else state.map.touchZoom.disable();
+  if(state.wasScrollZoom)state.map.scrollWheelZoom?.enable();
+  else state.map.scrollWheelZoom?.disable();
   if(backToEditor){
    state.map.setView(state.oldCenter,state.oldZoom,{animate:false});
    if(!dialog.open)dialog.showModal();
@@ -446,17 +454,33 @@ function mount(api){
  $("grMainSize").oninput=()=>{
   if(!mainSession)return;
   manual.scale=manual.baseScale*Math.pow(2,Number($("grMainSize").value)/100);
-  drawOnMain();
+  syncMainControls();
+ };
+ $("grMainSizeNumber").onchange=()=>{
+  if(!mainSession)return;
+  const value=Number($("grMainSizeNumber").value);
+  if(Number.isFinite(value)&&value>=1&&value<=10000)
+   manual.scale=manual.baseScale*value/100;
+  else $("grMainStatus").textContent="Bildzoom: Bitte einen Wert zwischen 1 und 10.000 % eingeben.";
+  syncMainControls();
  };
  $("grMainAngle").oninput=()=>{
   if(!mainSession)return;
   manual.rotation=Number($("grMainAngle").value);
-  drawOnMain();
+  syncMainControls();
+ };
+ $("grMainAngleNumber").onchange=()=>{
+  if(!mainSession)return;
+  const value=Number($("grMainAngleNumber").value);
+  if(Number.isFinite(value)&&value>=-180&&value<=180)
+   manual.rotation=value;
+  else $("grMainStatus").textContent="Drehung: Bitte einen Wert zwischen −180° und +180° eingeben.";
+  syncMainControls();
  };
  $("grMainOpacity").oninput=()=>{
   if(!mainSession)return;
   manual.opacity=Number($("grMainOpacity").value)/100;
-  drawOnMain();
+  syncMainControls();
  };
  $("grMainZoomIn").onclick=()=>api.map.zoomIn();
  $("grMainZoomOut").onclick=()=>api.map.zoomOut();
