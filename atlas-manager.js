@@ -105,9 +105,10 @@
       return [[south,west],[north,east]];
     }
     function sanitizeMap(v) {
-      var type = v.type === "geoportal" ? "geoportal" : v.type === "histomap" ? "histomap" : v.type === "wms" ? "wms" : v.type === "wmts" ? "wmts" : v.type === "tms" ? "tms" : "xyz";
+      var type = v.type === "georef" ? "georef" : v.type === "geoportal" ? "geoportal" : v.type === "histomap" ? "histomap" : v.type === "wms" ? "wms" : v.type === "wmts" ? "wmts" : v.type === "tms" ? "tms" : "xyz";
       var name = String(v.name || "").trim().slice(0, 220);
-      var url = safeHttp(v.sourceUrl);
+      var url = type==="georef"&&/^atlas-georef:[a-z0-9-]{10,70}$/i.test(String(v.sourceUrl||""))
+        ?String(v.sourceUrl):safeHttp(v.sourceUrl);
       return {
         name: name, displayName: name, year: Number.isInteger(Number(v.year)) && Number(v.year) >= 1 && Number(v.year) <= 2100 ? Number(v.year) : null,
         region: String(v.region || "Berlin").trim().slice(0, 100),
@@ -266,7 +267,7 @@
       }
       if(!clean.name||!clean.sourceUrl)throw Error("Name und Kartenadresse erforderlich.");
       if(clean.type==="wms"&&!clean.layerName)throw Error("WMS-Layername fehlt.");
-      if(!["wms","geoportal","histomap"].includes(clean.type)&&
+      if(!["wms","geoportal","histomap","georef"].includes(clean.type)&&
          !["{z}","{x}","{y}"].every(p=>clean.sourceUrl.includes(p)))
         throw Error("Für diese Kartenart werden {z}, {x} und {y} in der URL benötigt.");
       return clean;
@@ -300,7 +301,7 @@
       if (!item.name || !item.sourceUrl) throw new Error("Name und gültige HTTP(S)-Adresse sind erforderlich.");
       if (!defs[item.region]) throw new Error("Bitte zuerst eine Region anlegen.");
       if (item.type === "wms" && !item.layerName) throw new Error("Bitte den WMS-Layernamen angeben.");
-      if (item.type !== "wms" && item.type !== "histomap" && item.type !== "geoportal" && !["{z}","{x}","{y}"].every(function (v) {return item.sourceUrl.includes(v);}))
+      if (item.type !== "wms" && item.type !== "histomap" && item.type !== "geoportal" && item.type !== "georef" && !["{z}","{x}","{y}"].every(function (v) {return item.sourceUrl.includes(v);}))
         throw new Error("Eine XYZ-/TMS-URL muss {z}, {x} und {y} enthalten.");
       if (item.type === "histomap") {
         if (!window.AtlasHistoMap || item.sourceUrl !== "https://histomapberlin.de:8443/geoserver/histomap/wms" ||
