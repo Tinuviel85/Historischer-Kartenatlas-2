@@ -321,11 +321,29 @@ function mount(api){
   $("grMainOpacity").value=String(Math.round((manual.opacity??.55)*100));
   drawOnMain();
  }
+ // Im Hintergrund-Modus bleibt das historische Bild auf dem Display stehen.
+ // Die Referenzkarte bewegt sich darunter; die Bild-Geokoordinaten werden
+ // in Echtzeit an die neue Kartenmitte und Zoomstufe angepasst.
+ function lockOverlayScreenPosition(){
+  if(!mainSession||!manual||mainSession.moveMode!=="background")return;
+  const map=api.map,p=map.latLngToContainerPoint([manual.lat,manual.lng]);
+  mainSession.screenLock={x:p.x,y:p.y,pixelWidth:w*manual.scale*2**map.getZoom()};
+ }
+ function updateAfterMapMove(){
+  if(!mainSession)return;
+  const map=api.map,lock=mainSession.screenLock;
+  if(mainSession.moveMode==="background"&&lock){
+   const ll=map.containerPointToLatLng([lock.x,lock.y]);
+   manual.lat=ll.lat;manual.lng=ll.lng;
+   manual.scale=lock.pixelWidth/(w*2**map.getZoom());
+   syncMainControls();
+  }else drawOnMain();
+ }
  function endMainAlignment(backToEditor=false){
   if(!mainSession)return;
   const state=mainSession;
   mainSession=null;
-  state.map.off("move zoomend resize",drawOnMain);
+  state.map.off("move zoomend resize",updateAfterMapMove);
   const c=state.container;
   c.removeEventListener("pointerdown",state.down);
   c.removeEventListener("pointermove",state.move);
@@ -430,6 +448,8 @@ function mount(api){
     }
     pointers.clear();dragState=null;gesture=null;
     mainSession.moveMode=background?"background":"image";
+    if(background)lockOverlayScreenPosition();
+    else mainSession.screenLock=null;
     if(background){
      map.dragging?.enable();
      map.touchZoom?.enable();
@@ -442,7 +462,7 @@ function mount(api){
     $("grMoveImage").setAttribute("aria-pressed",String(!background));
     $("grMoveBackground").setAttribute("aria-pressed",String(background));
     $("grMapHelp").textContent=background?
-     "Berlin-Karte bewegen: die Grundkarte mit einem Finger verschieben, mit zwei Fingern zoomen. Das historische Bild bleibt geografisch ausgerichtet. Zum Bildwechsel oben umschalten.":
+     "Berlin-Karte bewegen: die Grundkarte mit einem Finger verschieben oder mit zwei Fingern zoomen. Das historische Bild bleibt an derselben Bildschirmposition, während die Georeferenzierung angepasst wird.":
      "Historische Karte bewegen: mit einem Finger verschieben und mit zwei Fingern drehen oder skalieren. Die Berlin-Karte bleibt dabei stehen.";
     $("grMainStatus").textContent=background?
      "Hintergrundkarte kann jetzt frei bewegt werden; für das historische Bild wieder umschalten.":
@@ -466,7 +486,7 @@ function mount(api){
    container.addEventListener("pointerup",up);
    container.addEventListener("pointercancel",up);
    document.addEventListener("keydown",keydown);
-   map.on("move zoomend resize",drawOnMain);
+   map.on("move zoomend resize",updateAfterMapMove);
    $("grMainStatus").textContent="";
    mainImage.src=url;mainImage.hidden=false;bar.hidden=false;
    stage.classList.add("gr-aligning");
@@ -485,7 +505,7 @@ function mount(api){
  $("grMainSize").oninput=()=>{
   if(!mainSession)return;
   manual.scale=manual.baseScale*Math.pow(2,Number($("grMainSize").value)/100);
-  syncMainControls();
+  lockOverlayScreenPosition();syncMainControls();
  };
  $("grMainSizeNumber").onchange=()=>{
   if(!mainSession)return;
@@ -493,7 +513,7 @@ function mount(api){
   if(Number.isFinite(value)&&value>=1&&value<=10000)
    manual.scale=manual.baseScale*value/100;
   else $("grMainStatus").textContent="Bildzoom: Bitte einen Wert zwischen 1 und 10.000 % eingeben.";
-  syncMainControls();
+  lockOverlayScreenPosition();syncMainControls();
  };
  $("grMainAngle").oninput=()=>{
   if(!mainSession)return;
@@ -518,7 +538,7 @@ function mount(api){
  $("grMainReset").onclick=()=>{
   if(!mainSession)return;
   const center=api.map.getCenter();manual.lat=center.lat;manual.lng=center.lng;
-  drawOnMain();
+  lockOverlayScreenPosition();syncMainControls();
  };
  $("grMainCancel").onclick=()=>endMainAlignment(true);
  $("grMainConfirm").onclick=async()=>{
