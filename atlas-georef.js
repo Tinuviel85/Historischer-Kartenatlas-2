@@ -272,15 +272,18 @@ function mount(api){
   photo=file;img=image;w=img.naturalWidth;h=img.naturalHeight;
   const scale=Math.min(850/w,600/h,1);
   canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));
-  points=[];id=null;renderPoints();draw();
-  say("Bild geladen ("+w+" × "+h+"). Passpunkte auswählen.");
+  points=[];id=null;manual=null;pending=null;renderPoints();draw();
+  if(mode==="manual"){ensureManual(true);renderManual();}
+  say("Bild geladen ("+w+" × "+h+"). "+(mode==="manual"?"Jetzt kannst du es unten verschieben.":"Jetzt Passpunkte setzen."));
  }
  $("grFile").onchange=e=>{read(e.target.files?.[0]).then(()=>{$("grName").value=e.target.files?.[0]?.name.replace(/\.[^.]+$/,"")||""}).catch(er=>say(er.message));};
  function refMap(){
   if(ref)return;
   ref=L.map("grReference",{zoomControl:true}).setView(api.map.getCenter(),Math.max(10,api.map.getZoom()));
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(ref);
+  enableDragging();
   ref.on("click",e=>{
+   if(mode==="manual")return;
    if(!pending)return say("Erst einen Punkt auf dem historischen Bild markieren.");
    points.push({...pending,lat:e.latlng.lat,lng:e.latlng.lng});pending=null;
    renderPoints();draw();say(points.length+" Passpunkte gesetzt.");
@@ -291,7 +294,9 @@ function mount(api){
   const r={id:id||((crypto.randomUUID&&crypto.randomUUID())||String(Date.now())),
    name:$("grName").value.trim()||"Eigene Karte",
    region:$("grRegion").value.trim()||"Berlin",year:Number($("grYear").value)||null,
-   image:photo,width:w,height:h,points:points.map(p=>({...p})),savedAt:new Date().toISOString()};
+   image:photo,width:w,height:h,points:points.map(p=>({...p})),
+   mode,manual:mode==="manual"?(ensureManual()?{...manual}:null):null,
+   savedAt:new Date().toISOString()};
   const b=bounds(r,L);
   return {r,b};
  }
@@ -328,12 +333,14 @@ function mount(api){
    const blob=await(await fetch(data.image)).blob();
    await read(blob);
    points=data.project.points.map(p=>({u:Number(p.u),v:Number(p.v),lat:Number(p.lat),lng:Number(p.lng)}));
+   manual=data.project.manual?{...data.project.manual}:null;
    if(points.some(p=>![p.u,p.v,p.lat,p.lng].every(Number.isFinite)))
     throw Error("Die Passpunkte enthalten ungültige Koordinaten.");
    $("grName").value=String(data.project.name||"Historische Karte").slice(0,180);
    $("grRegion").value=String(data.project.region||"Berlin").slice(0,80);
    $("grYear").value=data.project.year||"";
-   renderPoints();draw();say("Projekt mit Bild und "+points.length+" Passpunkten importiert.");
+   setMode(data.project.mode==="manual"?"manual":"points");
+   renderPoints();draw();say("Projekt importiert: "+(mode==="manual"?"manuelle Überlagerung.":points.length+" Passpunkte."));
   }catch(er){say("Projektimport fehlgeschlagen: "+er.message)}
   e.target.value="";
  };
@@ -352,6 +359,8 @@ function mount(api){
      i.onload=()=>{URL.revokeObjectURL(u);img=i;w=i.naturalWidth;h=i.naturalHeight;
       const scale=Math.min(850/w,600/h,1);
       canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));
+      manual=p.manual?{...p.manual}:null;
+      setMode(p.mode==="manual"?"manual":"points");
       renderPoints();draw();};i.src=u;
     };
     row.appendChild(edit);box.appendChild(row);
