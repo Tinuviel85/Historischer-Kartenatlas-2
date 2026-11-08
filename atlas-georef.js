@@ -262,6 +262,190 @@ function mount(api){
   container.addEventListener("pointerup",end);
   container.addEventListener("pointercancel",end);
  }
+ // Ausrichtung erfolgt auf der echten Hauptkarte, nicht in einem zweiten Kartenfenster.
+ const mainImage=document.createElement("img");
+ mainImage.className="gr-stage-image";mainImage.alt="Zu georeferenzierende historische Karte";
+ mainImage.draggable=false;mainImage.hidden=true;
+ const bar=document.createElement("section");bar.className="gr-stage-editor";
+ bar.hidden=true;bar.setAttribute("role","region");
+ bar.setAttribute("aria-label","Historische Karte auf der Berlin-Karte ausrichten");
+ bar.innerHTML=
+  '<h3>Historische Karte auf Berlin ausrichten</h3>'+
+  '<p>Bild mit einem Finger verschieben. Darunter bleibt die heutige Karte stehen. Größe und Drehung ändern, bis Straßen und Gebäude übereinstimmen.</p>'+
+  '<div class="gr-sliders">'+
+  '<label>Bildgröße <output id="grMainSizeValue">100 %</output><input id="grMainSize" type="range" min="-400" max="400" step="1" value="0"></label>'+
+  '<label>Drehung <output id="grMainAngleValue">0°</output><input id="grMainAngle" type="range" min="-180" max="180" step="0.5" value="0"></label>'+
+  '<label>Transparenz <output id="grMainOpacityValue">55 %</output><input id="grMainOpacity" type="range" min="5" max="100" step="1" value="55"></label></div>'+
+  '<div class="gr-toolbar-buttons">'+
+  '<button type="button" id="grMainZoomOut" title="Moderne Karte verkleinern">Karte −</button>'+
+  '<button type="button" id="grMainZoomIn" title="Moderne Karte vergrößern">Karte +</button>'+
+  '<button type="button" id="grMainReset">Bild zentrieren</button>'+
+  '<button type="button" id="grMainCancel" class="gr-cancel">Abbrechen</button>'+
+  '<button type="button" id="grMainConfirm" class="gr-confirm">Ausrichtung bestätigen & speichern</button>'+
+  '</div><p id="grMainStatus" aria-live="polite"></p>';
+ stage.append(mainImage,bar);
+ function initMainManual(){
+  if(!img||!photo)throw Error("Bitte zuerst eine PDF- oder Bilddatei laden.");
+  const map=api.map,center=map.getCenter();
+  if(!manual){
+   const baseScale=Math.min(760,Math.max(160,map.getSize().x*.72))/(w*2**map.getZoom());
+   manual={lat:center.lat,lng:center.lng,baseScale,scale:baseScale,rotation:0,opacity:.55};
+  }else{
+   if(!Number.isFinite(manual.baseScale)||manual.baseScale<=0)
+    manual.baseScale=manual.scale;
+   if(!Number.isFinite(manual.opacity))manual.opacity=.55;
+  }
+ }
+ function drawOnMain(){
+  if(!mainSession||!manual)return;
+  const map=api.map,center=map.latLngToContainerPoint([manual.lat,manual.lng]);
+  const pixelFactor=2**map.getZoom();
+  mainImage.style.left=center.x+"px";mainImage.style.top=center.y+"px";
+  mainImage.style.width=(w*manual.scale*pixelFactor)+"px";
+  mainImage.style.height=(h*manual.scale*pixelFactor)+"px";
+  mainImage.style.transform="translate(-50%,-50%) rotate("+manual.rotation+"deg)";
+  mainImage.style.opacity=String(manual.opacity??.55);
+  const factor=Math.round(100*manual.scale/manual.baseScale);
+  $("grMainSizeValue").textContent=factor+" %";
+  $("grMainAngleValue").textContent=Number(manual.rotation||0).toFixed(1).replace(/\.0$/,"")+"°";
+  $("grMainOpacityValue").textContent=Math.round(100*(manual.opacity??.55))+" %";
+ }
+ function syncMainControls(){
+  $("grMainSize").value=String(Math.max(-400,Math.min(400,Math.round(100*Math.log2(manual.scale/manual.baseScale)))));
+  $("grMainAngle").value=String(Number(manual.rotation)||0);
+  $("grMainOpacity").value=String(Math.round((manual.opacity??.55)*100));
+  drawOnMain();
+ }
+ function endMainAlignment(backToEditor=false){
+  if(!mainSession)return;
+  const state=mainSession;
+  mainSession=null;
+  state.map.off("move zoomend resize",drawOnMain);
+  const c=state.container;
+  c.removeEventListener("pointerdown",state.down);
+  c.removeEventListener("pointermove",state.move);
+  c.removeEventListener("pointerup",state.up);
+  c.removeEventListener("pointercancel",state.up);
+  document.removeEventListener("keydown",state.keydown);
+  mainImage.hidden=true;mainImage.removeAttribute("src");
+  URL.revokeObjectURL(state.url);bar.hidden=true;
+  stage.classList.remove("gr-aligning");
+  if(state.historical)state.historical.style.visibility=state.visibility;
+  if(state.wasDragging)state.map.dragging.enable();
+  if(state.wasTouchZoom)state.map.touchZoom.enable();
+  if(backToEditor){
+   state.map.setView(state.oldCenter,state.oldZoom,{animate:false});
+   if(!dialog.open)dialog.showModal();
+   say("Ausrichtung nicht gespeichert. Du kannst sie erneut auf der großen Karte beginnen.");
+  }
+ }
+ function startMainAlignment(){
+  if(mainSession)return;
+  if(!img||!photo)return say("Bitte zuerst ein Bild oder eine PDF laden.");
+  try{
+   const map=api.map,oldCenter=map.getCenter(),oldZoom=map.getZoom();
+   api.suspendAutoFollow?.();
+   const place=String($("grRegion").value||"").trim().toLocaleLowerCase("de");
+   if(place==="berlin"&&!(oldCenter.lat>52.32&&oldCenter.lat<52.70&&oldCenter.lng>13.04&&oldCenter.lng<13.81))
+    map.setView([52.5205,13.4050],Math.max(13,Math.min(17,oldZoom)),{animate:false});
+   initMainManual();
+   const historical=api.historicalMap?.getContainer();
+   const container=map.getContainer();
+   const url=URL.createObjectURL(photo);
+   let dragState=null;
+   const down=e=>{
+    if(e.isPrimary===false||(e.pointerType==="mouse"&&e.button!==0))return;
+    if(e.target.closest?.("button,input,label,select,a,.leaflet-control"))return;
+    const centerPx=map.latLngToContainerPoint([manual.lat,manual.lng]);
+    dragState={pointerId:e.pointerId,x:e.clientX,y:e.clientY,cx:centerPx.x,cy:centerPx.y};
+    e.preventDefault();
+    try{container.setPointerCapture(e.pointerId);}catch(_){}
+   };
+   const move=e=>{
+    if(!dragState||dragState.pointerId!==e.pointerId)return;
+    e.preventDefault();
+    const ll=map.containerPointToLatLng([
+     dragState.cx+e.clientX-dragState.x,dragState.cy+e.clientY-dragState.y]);
+    manual.lat=ll.lat;manual.lng=ll.lng;drawOnMain();
+   };
+   const up=e=>{
+    if(!dragState||e.pointerId!==dragState.pointerId)return;
+    dragState=null;
+    try{if(container.hasPointerCapture(e.pointerId))container.releasePointerCapture(e.pointerId);}catch(_){}
+   };
+   const keydown=e=>{
+    if(e.key==="Escape"&&mainSession){e.preventDefault();endMainAlignment(true);}
+   };
+   mainSession={map,container,url,down,move,up,keydown,oldCenter,oldZoom,
+    historical,visibility:historical?.style.visibility||"",
+    wasDragging:!!map.dragging?.enabled?.(),
+    wasTouchZoom:!!map.touchZoom?.enabled?.()};
+   if(historical)historical.style.visibility="hidden";
+   if(mainSession.wasDragging)map.dragging.disable();
+   if(mainSession.wasTouchZoom)map.touchZoom.disable();
+   container.addEventListener("pointerdown",down);
+   container.addEventListener("pointermove",move);
+   container.addEventListener("pointerup",up);
+   container.addEventListener("pointercancel",up);
+   document.addEventListener("keydown",keydown);
+   map.on("move zoomend resize",drawOnMain);
+   mainImage.src=url;mainImage.hidden=false;bar.hidden=false;
+   stage.classList.add("gr-aligning");
+   dialog.close();
+   $("managerDialog")?.close();
+   $("sidebar")?.classList.remove("open");
+   syncMainControls();
+  }catch(e){
+   if(mainSession)endMainAlignment(true);
+   say("Ausrichtung nicht möglich: "+e.message);
+  }
+ }
+ $("grOnMain").onclick=startMainAlignment;
+ $("grMainSize").oninput=()=>{
+  if(!mainSession)return;
+  manual.scale=manual.baseScale*Math.pow(2,Number($("grMainSize").value)/100);
+  drawOnMain();
+ };
+ $("grMainAngle").oninput=()=>{
+  if(!mainSession)return;
+  manual.rotation=Number($("grMainAngle").value);
+  drawOnMain();
+ };
+ $("grMainOpacity").oninput=()=>{
+  if(!mainSession)return;
+  manual.opacity=Number($("grMainOpacity").value)/100;
+  drawOnMain();
+ };
+ $("grMainZoomIn").onclick=()=>api.map.zoomIn();
+ $("grMainZoomOut").onclick=()=>api.map.zoomOut();
+ $("grMainReset").onclick=()=>{
+  if(!mainSession)return;
+  const center=api.map.getCenter();manual.lat=center.lat;manual.lng=center.lng;
+  drawOnMain();
+ };
+ $("grMainCancel").onclick=()=>endMainAlignment(true);
+ $("grMainConfirm").onclick=async()=>{
+  if(!mainSession)return;
+  const confirm=$("grMainConfirm");confirm.disabled=true;
+  try{
+   mode="manual";
+   const {r,b}=record();
+   await put(r);id=r.id;
+   const item={name:r.name,region:r.region,year:r.year,type:"georef",
+    sourceUrl:"atlas-georef:"+r.id,bounds:b,provider:"Eigene georeferenzierte Karte · lokal",
+    detailUrl:location.origin+location.pathname};
+   endMainAlignment(false);
+   await api.saveDiscoveredMap(item);
+   api.setNotice?.("Ausrichtung bestätigt. Die Karte ist in deiner Bibliothek gespeichert.");
+  }catch(e){
+   const message="Speichern fehlgeschlagen: "+e.message;
+   if(mainSession)$("grMainStatus").textContent=message;
+   else{
+    say(message);
+    if(!dialog.open)dialog.showModal();
+   }
+  }finally{confirm.disabled=false;}
+ };
  async function read(file){
   if(!file)return;
   if(file.size>30*1024*1024)throw Error("Diese Version unterstützt Dateien bis 30 MB.");
