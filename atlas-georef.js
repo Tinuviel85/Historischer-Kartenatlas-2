@@ -135,7 +135,7 @@ function mount(api){
    row.textContent=(j+1)+". "+p.lat.toFixed(5)+" / "+p.lng.toFixed(5);
    const del=document.createElement("button");del.textContent="Löschen";del.onclick=()=>{points.splice(j,1);renderPoints();draw();};
    row.appendChild(del);box.appendChild(row);
-   if(ref){
+   if(ref&&mode==="points"){
     const icon=L.divIcon({className:"gr-pin",html:String(j+1),iconSize:[25,25],iconAnchor:[12,12]});
     markers.push(L.marker([p.lat,p.lng],{icon,interactive:false}).addTo(ref));
    }
@@ -156,7 +156,7 @@ function mount(api){
   if(!manual||reset){
    const center=ref.getCenter(),screen=ref.getSize();
    const baseScale=Math.min(780,Math.max(150,screen.x*.72))/(w*2**ref.getZoom());
-   manual={lat:center.lat,lng:center.lng,baseScale,scale:baseScale,rotation:0};
+   manual={lat:center.lat,lng:center.lng,baseScale,scale:baseScale,rotation:0,opacity:opacity()};
    $("grScale").value="100";$("grRotate").value="0";
   }
   return true;
@@ -192,12 +192,18 @@ function mount(api){
  }
  function setMode(next){
   mode=next==="manual"?"manual":"points";
-  pending=null;draw();
+  pending=null;draw();renderPoints();
   $("grModePoints").setAttribute("aria-pressed",String(mode==="points"));
   $("grModeManual").setAttribute("aria-pressed",String(mode==="manual"));
   $("grControls").hidden=mode!=="manual";
+  $("grClear").hidden=mode==="manual";
   if(mode==="manual"){
    ensureManual();
+   if(manual){
+    $("grScale").value=String(Math.max(10,Math.min(400,Math.round(100*manual.scale/manual.baseScale)||100)));
+    $("grRotate").value=String(Number(manual.rotation)||0);
+    $("grOpacity").value=String(Math.round((manual.opacity??.55)*100));
+   }
    if(ref){ref.dragging.disable();ref.getContainer().style.touchAction="none";}
    renderManual();
    say(img?"Historisches Bild unten direkt verschieben. Größe, Drehung und Transparenz oben einstellen.":"Bitte zuerst eine Karte laden.");
@@ -222,6 +228,7 @@ function mount(api){
  };
  $("grOpacity").oninput=()=>{
   $("grOpacityLabel").textContent=$("grOpacity").value+" %";
+  if(manual)manual.opacity=opacity();
   manualLayer?.setOpacity(opacity());
  };
  $("grResetManual").onclick=()=>{
@@ -326,8 +333,11 @@ function mount(api){
    const f=e.target.files?.[0];if(!f)return;
    if(f.size>45*1024*1024)throw Error("Projektdatei zu groß (max. 45 MB).");
    const data=JSON.parse(await f.text());
-   if(data.format!=="atlas-georef-v1"||!data.project?.points||
-      !Array.isArray(data.project.points)||data.project.points.length<3||
+   const isManual=data.project?.mode==="manual"&&
+     Number.isFinite(data.project?.manual?.scale)&&data.project.manual.scale>0&&
+     Number.isFinite(data.project?.manual?.lat)&&Number.isFinite(data.project?.manual?.lng);
+   if(data.format!=="atlas-georef-v1"||!Array.isArray(data.project?.points)||
+      (!isManual&&data.project.points.length<3)||
       !/^data:image\/(?:png|jpeg|webp);base64,/i.test(data.image||""))
     throw Error("Keine gültige Projektdatei.");
    const blob=await(await fetch(data.image)).blob();
@@ -350,7 +360,7 @@ function mount(api){
    const data=await list();
    for(const p of data){
     const row=document.createElement("div");row.className="gr-point";
-    row.textContent=p.name+" ("+p.points.length+" Punkte)";
+    row.textContent=p.name+" ("+(p.mode==="manual"?"manuell ausgerichtet":p.points.length+" Punkte")+")";
     const edit=document.createElement("button");edit.textContent="Bearbeiten";
     edit.onclick=async()=>{
      photo=p.image;id=p.id;points=p.points.map(x=>({...x}));
