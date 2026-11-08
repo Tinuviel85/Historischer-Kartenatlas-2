@@ -428,6 +428,7 @@ function mount(api){
    container.addEventListener("pointercancel",up);
    document.addEventListener("keydown",keydown);
    map.on("move zoomend resize",drawOnMain);
+   $("grMainStatus").textContent="";
    mainImage.src=url;mainImage.hidden=false;bar.hidden=false;
    stage.classList.add("gr-aligning");
    dialog.close();
