@@ -419,7 +419,8 @@
   <script src="atlas-histomap.js?v=20261106-allsheets"></script>
   <script src="atlas-geoportal.js?v=20261107-geoportal-berlin-only"></script>
   <script src="atlas-geosearch.js?v=20261107-alkis-scale-and-sachdaten3"></script>
-  <script src="atlas-manager.js?v=20261107-free-georeferenced-xyz-only"></script>
+  <script src="atlas-manager.js?v=20261108-georef-local-library1"></script>
+  <script src="atlas-georef.js?v=20261108-georef-mvp1"></script>
   <script>
     'use strict';
     // Die gesamte Kartenkonfiguration bleibt in dieser Datei (keine maps.json).
@@ -932,7 +933,7 @@
         const cfg=regionDefinitions[m.region], zoom=Math.min(cfg.zoom,12);
         const ll=L.latLng(cfg.center);
         const point=map.project(ll,zoom).divideBy(256).floor();
-        const previewUrl=(m.type==='wms'||m.type==='histomap'||m.type==='geoportal') ? '' : m.sourceUrl.replace('{z}',zoom).replace('{x}',point.x).replace('{y}',point.y);
+        const previewUrl=(m.type==='wms'||m.type==='histomap'||m.type==='geoportal'||m.type==='georef') ? '' : m.sourceUrl.replace('{z}',zoom).replace('{x}',point.x).replace('{y}',point.y);
         const img=$('mapPreview');img.hidden=true;$('previewFallback').hidden=false;
         img.onerror=()=>{img.hidden=true;$('previewFallback').hidden=false;};
         img.onload=()=>{img.hidden=false;$('previewFallback').hidden=true;};
@@ -965,7 +966,9 @@
         $('nextYear').onclick=()=>{if(pos>=0&&pos<timeline.length-1)selectMap(timeline[pos+1].id);};
       }
       function createDisplayLayer(m){
-        return m.type==='geoportal'
+        return m.type==='georef'
+          ?window.AtlasGeoRef.createLayer(L,m,(message)=>setNotice(message))
+          : m.type==='geoportal'
           ? window.AtlasGeoportal.createLayer(L,m.sourceUrl,(message)=>setNotice(message,6500),{layerName:m.layerName})
           : m.type==='histomap'
             ? window.AtlasHistoMap.createFullYearLayer(L,m.year,(message)=>setNotice(message,5500),m.layerName)
@@ -1117,7 +1120,7 @@
         return null;
       }
       function previewMap(item){
-        if(!item?.sourceUrl||!/^https?:\/\//i.test(item.sourceUrl))
+        if(!item?.sourceUrl||!(/^https?:\/\//i.test(item.sourceUrl)||/^atlas-georef:[a-z0-9-]{10,70}$/i.test(item.sourceUrl)))
           throw Error("Die Vorschau benötigt eine gültige Kartenadresse.");
         discardPreview(true);
         previewReturnState=capturePreviewReturnState();
@@ -1416,6 +1419,7 @@
         setMode(active&&p.get('modus')==='compare'?'compare':'overlay');
       }
       window.atlasManager=window.AtlasManager?.mount({maps,regionDefinitions,definedRegions,map,renderRegions,renderList,updateTimeline,selectMap,previewMap,setNotice,getActive:()=>active,setRegionFilter:value=>{regionFilter=value;}});
+      window.atlasGeoRefEditor=window.AtlasGeoRef?.mount({map,previewMap,saveDiscoveredMap:item=>window.atlasManager.saveDiscoveredMap(item),setNotice});
       $('compareMode').disabled=true;
       renderRegions();
       renderList();
