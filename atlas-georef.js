@@ -90,7 +90,7 @@ function mount(api){
  '<div class="gr-fields"><label>Kartenname<input id="grName" placeholder="Historische Karte"></label><label>Region<input id="grRegion" value="Berlin"></label><label>Jahr<input id="grYear" type="number" min="1" max="2100"></label><label style="flex-basis:100%">PNG, JPG, WebP oder PDF (erste Seite)<input id="grFile" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"></label></div>'+
  '<div class="gr-views"><div><h3>1 · Historischer Scan</h3><div class="gr-pic"><canvas id="grImage" width="600" height="350"></canvas></div></div><div><h3>2 · Heutige Referenzkarte</h3><div id="grReference" class="gr-ref"></div></div></div>'+
  '<p id="grStatus" class="gr-status" role="status">Bild auswählen, dann Passpunkte setzen.</p><div id="grPoints" class="gr-points"></div>'+
- '<div class="gr-actions"><button id="grPreview" type="button">Auf Karte legen (Vorschau)</button><button id="grSave" type="button">Karte speichern</button><button id="grExport" type="button">Projekt exportieren</button><button id="grClear" type="button">Punkte zurücksetzen</button></div>'+
+ '<div class="gr-actions"><button id="grPreview" type="button">Auf Karte legen (Vorschau)</button><button id="grSave" type="button">Karte speichern</button><button id="grExport" type="button">Projekt exportieren</button><button id="grImport" type="button">Projekt importieren</button><button id="grClear" type="button">Punkte zurücksetzen</button></div><input id="grImportFile" type="file" accept=".json,application/json" hidden>'+
  '<div style="border-top:1px solid #d6e6d9;padding-top:10px"><strong>Gespeicherte lokale Projekte</strong><div id="grProjects"></div></div>'+
  '<p class="gr-status">Derzeit lokale Speicherung im Browser (IndexedDB). Die spätere OneDrive-Synchronisierung benötigt eine Microsoft-App-Registrierung. Bitte Projekte auch als Datei sichern.</p>';
  document.body.appendChild(dialog);
@@ -183,6 +183,28 @@ function mount(api){
    const b=new Blob([JSON.stringify({format:"atlas-georef-v1",project:{...r,image:undefined},image:base64})],{type:"application/json"});
    const u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="atlas-georeferenzierung-"+r.id+".json";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
   }catch(e){say("Export: "+e.message);}
+ };
+ $("grImport").onclick=()=>$("grImportFile").click();
+ $("grImportFile").onchange=async e=>{
+  try{
+   const f=e.target.files?.[0];if(!f)return;
+   if(f.size>45*1024*1024)throw Error("Projektdatei zu groß (max. 45 MB).");
+   const data=JSON.parse(await f.text());
+   if(data.format!=="atlas-georef-v1"||!data.project?.points||
+      !Array.isArray(data.project.points)||data.project.points.length<3||
+      !/^data:image\/(?:png|jpeg|webp);base64,/i.test(data.image||""))
+    throw Error("Keine gültige Projektdatei.");
+   const blob=await(await fetch(data.image)).blob();
+   await read(blob);
+   points=data.project.points.map(p=>({u:Number(p.u),v:Number(p.v),lat:Number(p.lat),lng:Number(p.lng)}));
+   if(points.some(p=>![p.u,p.v,p.lat,p.lng].every(Number.isFinite)))
+    throw Error("Die Passpunkte enthalten ungültige Koordinaten.");
+   $("grName").value=String(data.project.name||"Historische Karte").slice(0,180);
+   $("grRegion").value=String(data.project.region||"Berlin").slice(0,80);
+   $("grYear").value=data.project.year||"";
+   renderPoints();draw();say("Projekt mit Bild und "+points.length+" Passpunkten importiert.");
+  }catch(er){say("Projektimport fehlgeschlagen: "+er.message)}
+  e.target.value="";
  };
  async function projectList(){
   const box=$("grProjects");box.replaceChildren();
