@@ -271,7 +271,7 @@ function mount(api){
  bar.setAttribute("aria-label","Historische Karte auf der Berlin-Karte ausrichten");
  bar.innerHTML=
   '<h3>Historische Karte auf Berlin ausrichten</h3>'+
-  '<p>Bild mit einem Finger verschieben. Darunter bleibt die heutige Karte stehen. Größe und Drehung ändern, bis Straßen und Gebäude übereinstimmen.</p>'+
+  '<p>Mit einem Finger verschieben; mit zwei Fingern vergrößern und drehen. Die heutige Berlin-Karte bleibt darunter stehen. Alternativ die Regler benutzen.</p>'+
   '<div class="gr-sliders">'+
   '<label>Bildgröße <output id="grMainSizeValue">100 %</output><input id="grMainSize" type="range" min="-400" max="400" step="1" value="0"></label>'+
   '<label>Drehung <output id="grMainAngleValue">0°</output><input id="grMainAngle" type="range" min="-180" max="180" step="0.5" value="0"></label>'+
@@ -352,26 +352,65 @@ function mount(api){
    const historical=api.historicalMap?.getContainer();
    const container=map.getContainer();
    const url=URL.createObjectURL(photo);
-   let dragState=null;
+   const pointers=new Map();
+   let dragState=null,gesture=null;
+   function gesturePoints(){
+    const [a,b]=[...pointers.values()];
+    if(!a||!b)return null;
+    const dx=b.x-a.x,dy=b.y-a.y;
+    return {midX:(a.x+b.x)/2,midY:(a.y+b.y)/2,
+     distance:Math.max(1,Math.hypot(dx,dy)),angle:Math.atan2(dy,dx)};
+   }
+   function startGesture(){
+    const g=gesturePoints();
+    if(!g)return;
+    const center=map.latLngToContainerPoint([manual.lat,manual.lng]);
+    gesture={...g,cx:center.x,cy:center.y,scale:manual.scale,rotation:manual.rotation};
+    dragState=null;
+   }
    const down=e=>{
-    if(e.isPrimary===false||(e.pointerType==="mouse"&&e.button!==0))return;
+    if((e.pointerType==="mouse"&&e.button!==0)||!mainSession)return;
     if(e.target.closest?.("button,input,label,select,a,.leaflet-control"))return;
-    const centerPx=map.latLngToContainerPoint([manual.lat,manual.lng]);
-    dragState={pointerId:e.pointerId,x:e.clientX,y:e.clientY,cx:centerPx.x,cy:centerPx.y};
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pointers.size===1){
+     const cp=map.latLngToContainerPoint([manual.lat,manual.lng]);
+     dragState={id:e.pointerId,x:e.clientX,y:e.clientY,cx:cp.x,cy:cp.y};
+     gesture=null;
+    }else if(pointers.size===2)startGesture();
     e.preventDefault();
     try{container.setPointerCapture(e.pointerId);}catch(_){}
    };
    const move=e=>{
-    if(!dragState||dragState.pointerId!==e.pointerId)return;
+    if(!pointers.has(e.pointerId)||!mainSession)return;
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     e.preventDefault();
-    const ll=map.containerPointToLatLng([
-     dragState.cx+e.clientX-dragState.x,dragState.cy+e.clientY-dragState.y]);
-    manual.lat=ll.lat;manual.lng=ll.lng;drawOnMain();
+    if(pointers.size>=2&&gesture){
+     const g=gesturePoints();
+     if(!g)return;
+     manual.scale=manual.baseScale*Math.max(1/16,Math.min(16,
+      gesture.scale*g.distance/gesture.distance/manual.baseScale));
+     const angle=(gesture.rotation+(g.angle-gesture.angle)*180/Math.PI)%360;
+     manual.rotation=(angle+540)%360-180;
+     const ll=map.containerPointToLatLng([
+      gesture.cx+g.midX-gesture.midX,gesture.cy+g.midY-gesture.midY]);
+     manual.lat=ll.lat;manual.lng=ll.lng;
+     syncMainControls();
+    }else if(dragState?.id===e.pointerId){
+     const ll=map.containerPointToLatLng([
+      dragState.cx+e.clientX-dragState.x,dragState.cy+e.clientY-dragState.y]);
+     manual.lat=ll.lat;manual.lng=ll.lng;drawOnMain();
+    }
    };
    const up=e=>{
-    if(!dragState||e.pointerId!==dragState.pointerId)return;
-    dragState=null;
+    if(!pointers.has(e.pointerId))return;
+    pointers.delete(e.pointerId);
     try{if(container.hasPointerCapture(e.pointerId))container.releasePointerCapture(e.pointerId);}catch(_){}
+    gesture=null;dragState=null;
+    if(pointers.size===1){
+     const [id,p]=[...pointers.entries()][0];
+     const cp=map.latLngToContainerPoint([manual.lat,manual.lng]);
+     dragState={id,x:p.x,y:p.y,cx:cp.x,cy:cp.y};
+    }
    };
    const keydown=e=>{
     if(e.key==="Escape"&&mainSession){e.preventDefault();endMainAlignment(true);}
@@ -392,7 +431,7 @@ function mount(api){
    mainImage.src=url;mainImage.hidden=false;bar.hidden=false;
    stage.classList.add("gr-aligning");
    dialog.close();
-   $("managerDialog")?.close();
+   if($("managerDialog")?.open)$("managerDialog").close();
    $("sidebar")?.classList.remove("open");
    syncMainControls();
   }catch(e){
