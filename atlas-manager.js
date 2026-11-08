@@ -286,7 +286,12 @@
           saveRegion(clean.region,centerLat,centerLon,12);
         }else await ensureRegion(clean.region);
       }
-      return upsert(clean,null,true);
+      // Local georeferencing projects retain the same ID when realigned.
+      // Replace the existing library item rather than creating a duplicate.
+      const existing=clean.type==="georef"
+        ?maps.find(m=>m&&!m.hidden&&m.type==="georef"&&m.sourceUrl===clean.sourceUrl)
+        :null;
+      return upsert(clean,existing?existing.id:null,true);
     }
     function upsert(item, id, keepView=false) {
       item = sanitizeMap(item);
