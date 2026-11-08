@@ -150,6 +150,109 @@ function mount(api){
   draw();
   say("Punkt "+(points.length+1)+" auf dem Scan markiert (orange). Jetzt denselben Ort unten antippen.");
  };
+ function ensureManual(reset=false){
+  if(!img)return false;
+  if(!ref)refMap();
+  if(!manual||reset){
+   const center=ref.getCenter(),screen=ref.getSize();
+   const baseScale=Math.min(780,Math.max(150,screen.x*.72))/(w*2**ref.getZoom());
+   manual={lat:center.lat,lng:center.lng,baseScale,scale:baseScale,rotation:0};
+   $("grScale").value="100";$("grRotate").value="0";
+  }
+  return true;
+ }
+ function renderManual(){
+  if(mode!=="manual"||!img||!ref)return;
+  if(!ensureManual())return;
+  if(!manualLayer){
+   const Manual=L.GridLayer.extend({
+    createTile:function(c,done){
+     const tile=document.createElement("canvas");tile.width=tile.height=256;
+     try{
+      const t=transform({mode:"manual",manual,width:w,height:h},L),z=2**c.z;
+      const ctx=tile.getContext("2d");
+      ctx.setTransform(t.x[0]*z,t.y[0]*z,t.x[1]*z,t.y[1]*z,
+        t.x[2]*z-c.x*256,t.y[2]*z-c.y*256);
+      ctx.drawImage(img,0,0,w,h);done(null,tile);
+     }catch(err){done(err,tile);}
+     return tile;
+    }
+   });
+   manualLayer=new Manual({tileSize:256,noWrap:true,opacity:opacity(),minZoom:2,maxZoom:19,keepBuffer:1});
+   manualLayer.addTo(ref);
+  }else manualLayer.redraw();
+  manualLayer.setOpacity(opacity());
+  $("grScaleLabel").textContent=$("grScale").value+" %";
+  $("grRotateLabel").textContent=$("grRotate").value+"°";
+  $("grOpacityLabel").textContent=$("grOpacity").value+" %";
+ }
+ function scheduleManual(){
+  if(frame!==null)return;
+  frame=requestAnimationFrame(()=>{frame=null;renderManual();});
+ }
+ function setMode(next){
+  mode=next==="manual"?"manual":"points";
+  pending=null;draw();
+  $("grModePoints").setAttribute("aria-pressed",String(mode==="points"));
+  $("grModeManual").setAttribute("aria-pressed",String(mode==="manual"));
+  $("grControls").hidden=mode!=="manual";
+  if(mode==="manual"){
+   ensureManual();
+   if(ref){ref.dragging.disable();ref.getContainer().style.touchAction="none";}
+   renderManual();
+   say(img?"Historisches Bild unten direkt verschieben. Größe, Drehung und Transparenz oben einstellen.":"Bitte zuerst eine Karte laden.");
+  }else{
+   if(ref){ref.dragging.enable();ref.getContainer().style.touchAction="";}
+   if(manualLayer&&ref?.hasLayer(manualLayer))ref.removeLayer(manualLayer);
+   manualLayer=null;
+   say(img?"Passpunkt auf der oberen Karte wählen, danach denselben Ort unten.":"Bitte zuerst eine Karte laden.");
+  }
+ }
+ $("grModePoints").onclick=()=>setMode("points");
+ $("grModeManual").onclick=()=>setMode("manual");
+ $("grScale").oninput=()=>{
+  if(!ensureManual())return;
+  manual.scale=manual.baseScale*Number($("grScale").value)/100;
+  scheduleManual();
+ };
+ $("grRotate").oninput=()=>{
+  if(!ensureManual())return;
+  manual.rotation=Number($("grRotate").value);
+  scheduleManual();
+ };
+ $("grOpacity").oninput=()=>{
+  $("grOpacityLabel").textContent=$("grOpacity").value+" %";
+  manualLayer?.setOpacity(opacity());
+ };
+ $("grResetManual").onclick=()=>{
+  if(!img)return say("Bitte zuerst eine Karte laden.");
+  ensureManual(true);scheduleManual();say("Bild in der Mitte neu platziert.");
+ };
+ function enableDragging(){
+  const container=ref.getContainer();
+  container.addEventListener("pointerdown",e=>{
+   if(mode!=="manual"||!manual||!img||(e.pointerType==="mouse"&&e.button!==0))return;
+   if(e.target.closest?.(".leaflet-control"))return;
+   e.preventDefault();
+   const origin=ref.project(L.latLng(manual.lat,manual.lng),ref.getZoom());
+   drag={id:e.pointerId,cx:e.clientX,cy:e.clientY,x:origin.x,y:origin.y};
+   try{container.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  container.addEventListener("pointermove",e=>{
+   if(!drag||e.pointerId!==drag.id||mode!=="manual")return;
+   e.preventDefault();
+   const center=ref.unproject(L.point(drag.x+e.clientX-drag.cx,drag.y+e.clientY-drag.cy),ref.getZoom());
+   manual.lat=center.lat;manual.lng=center.lng;
+   scheduleManual();
+  });
+  function end(e){
+   if(!drag||e.pointerId!==drag.id)return;
+   drag=null;
+   try{if(container.hasPointerCapture(e.pointerId))container.releasePointerCapture(e.pointerId);}catch(_){}
+  }
+  container.addEventListener("pointerup",end);
+  container.addEventListener("pointercancel",end);
+ }
  async function read(file){
   if(!file)return;
   if(file.size>30*1024*1024)throw Error("Diese Version unterstützt Dateien bis 30 MB.");
