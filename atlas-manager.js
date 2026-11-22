@@ -322,7 +322,16 @@
           throw new Error("Dieser Geoportal-Dienst ist nicht im geprüften Berliner Katalog.");
         if(!item.layerName)item.layerName="auto";
       }
-      if (mapExists(item, id)) throw new Error("Diese Karte ist bereits in deiner Bibliothek.");
+      // Region und andere Metadaten einer bestehenden Karte bearbeiten,
+      // ohne vorhandene Duplikate aus dem Altbestand erneut abzulehnen.
+      const previousMap = id === null || id === undefined ? null : maps[id];
+      const identicalSource = !!previousMap &&
+        previousMap.sourceUrl === item.sourceUrl &&
+        (previousMap.layerName || "") === (item.layerName || "") &&
+        (previousMap.type || "xyz") === (item.type || "xyz");
+      if (!identicalSource && mapExists(item, id))
+        throw new Error("Diese Karte ist bereits in deiner Bibliothek.");
+      const regionChanged = !!previousMap && previousMap.region !== item.region;
       if (id === null || id === undefined) {
         item.id = maps.length; item.custom = true; maps.push(item);
       } else {
@@ -330,7 +339,9 @@
         Object.assign(maps[id], item);
         if (id < defaultCount) overrides[id] = Object.assign({}, item);
       }
-      persist(); redraw(); api.selectMap(item.id,{restoreView:keepView}); return item;
+      persist();
+      if (regionChanged) api.setRegionFilter(item.region);
+      redraw(); api.selectMap(item.id,{restoreView:keepView}); return item;
     }
     // Manual entry is also a real map preview; only editing an existing
     // library item saves directly.
