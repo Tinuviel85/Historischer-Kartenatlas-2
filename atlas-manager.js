@@ -681,6 +681,165 @@
     const histoPanel=disclosure("managerHistoMapInfoProvider","HistoMap Berlin · Detailrecherche");
     histoPanel.appendChild(histoNote);
     discover.appendChild(histoPanel);
+
+    // Wikimedia MapWarper (warper.wmflabs.org): eigener Katalog und API.
+    // Die vorhandene MapWarper-Suche (mapwarper.net) bleibt unverändert.
+    (function addWikimediaMapWarper(){
+      const host="https://warper.wmflabs.org";
+      const panel=disclosure("managerWikimediaWarperProvider","Wikimedia MapWarper · Karten durchsuchen");
+      const intro=node("p","manager-muted");
+      intro.style.margin="12px";
+      intro.textContent="Auf der Wikimedia-Instanz historische Karten durchsuchen, ansehen und in die persönliche Kartenbibliothek übernehmen.";
+      const source=node("a","manager-action","Wikimedia-Karten im Original öffnen ↗");
+      source.href=host+"/maps";source.target="_blank";source.rel="noopener noreferrer";
+      source.style.cssText="display:inline-block;margin:0 12px 10px;text-decoration:none";
+      panel.append(intro,source);
+      const selection=node("label","manager-label","Zielregion der neuen Karte");
+      selection.style.cssText="display:block;margin:10px 12px";
+      const regionSelect=node("select","manager-search");
+      regionSelect.setAttribute("aria-label","Zielregion");
+      function syncRegions(){
+        const previous=regionSelect.value||"Berlin";
+        for(const region of ["Berlin",...regions.filter(r=>!["Alle","Favoriten","Weitere","Berlin"].includes(r))]){
+          if(!Array.from(regionSelect.options).some(o=>o.value===region)){
+            const option=node("option","",region);option.value=region;regionSelect.appendChild(option);
+          }
+        }
+        regionSelect.value=Array.from(regionSelect.options).some(o=>o.value===previous)?previous:"Berlin";
+      }
+      syncRegions();selection.appendChild(regionSelect);panel.appendChild(selection);
+      const form=node("form","manager-fields");
+      form.style.cssText="margin:12px";
+      form.innerHTML='<label class="manager-wide">Karten nach Ort oder Titel suchen<input class="manager-search" id="wmfWarperQuery" type="search" maxlength="100" value="Berlin" placeholder="Berlin, Potsdam, Wien …"></label><div class="manager-actions manager-wide"><button class="manager-action manager-primary" type="submit">Wikimedia durchsuchen</button><button class="manager-action" type="button" id="wmfWarperPrev">‹ Zurück</button><button class="manager-action" type="button" id="wmfWarperNext">Weitere ›</button></div>';
+      panel.appendChild(form);
+      const idForm=node("form","manager-fields");
+      idForm.style.cssText="margin:12px";
+      idForm.innerHTML='<label class="manager-wide">Karten-ID oder Link zu einer Wikimedia-Karte<input id="wmfWarperId" class="manager-search" type="text" value="2214" placeholder="2214 oder https://warper.wmflabs.org/maps/2214"></label><div class="manager-actions manager-wide"><button class="manager-action" type="submit">Karte per ID anzeigen</button></div>';
+      panel.appendChild(idForm);
+      const status=node("p","manager-status");
+      status.style.margin="10px 12px";status.setAttribute("role","status");status.setAttribute("aria-live","polite");
+      const results=node("div","manager-results");
+      results.style.cssText="max-height:45dvh;overflow:auto;margin:12px";
+      panel.append(status,results);
+      discover.insertBefore(panel,manualPanel);
+      let currentPage=1,totalPages=null,serial=0;
+      const prev=el("wmfWarperPrev"),next=el("wmfWarperNext");
+      function updatePaging(){
+        prev.disabled=currentPage<=1;
+        next.disabled=totalPages===null?true:currentPage>=totalPages;
+      }
+      function parseId(text){
+        const match=String(text||"").trim().match(/^(?:(?:https:\/\/warper\.wmflabs\.org\/maps\/))?([1-9]\d{0,8})(?:\/(?:export|edit|preview))?\/?$/i);
+        return match?String(Number(match[1])):null;
+      }
+      function makeItem(id,attrs){
+        id=parseId(id);if(!id)return null;
+        attrs=attrs||{};
+        const title=String(attrs.title||"Wikimedia-Karte #"+id).slice(0,220);
+        const match=String(attrs.date_depicted||title).match(/\b(1[0-9]{3}|20[0-9]{2})\b/);
+        return {id,name:title,year:match?Number(match[1]):null,status:String(attrs.status||"Status nicht ermittelt"),
+          url:host+"/maps/tile/"+id+"/{z}/{x}/{y}.png",detail:host+"/maps/"+id,
+          bounds:attrs.bbox||null,thumb:attrs.thumb_url||""};
+      }
+      function atlasEntry(item){
+        return {name:item.name,year:item.year,region:regionSelect.value||"Berlin",
+          provider:"Wikimedia MapWarper",type:"xyz",sourceUrl:item.url,
+          detailUrl:item.detail,bounds:item.bounds};
+      }
+      function present(items){
+        results.replaceChildren();
+        for(const item of items){
+          const row=node("div","manager-result");
+          row.style.cssText="align-items:flex-start;flex-wrap:wrap";
+          const box=node("div");box.style.cssText="min-width:0;flex:1 1 175px";
+          box.append(node("strong","",item.name),
+            node("small","", "#"+item.id+(item.year?" · "+item.year:"")+" · "+item.status));
+          const original=node("a","manager-label","Original öffnen");
+          original.href=item.detail;original.target="_blank";original.rel="noopener noreferrer";
+          original.style.cssText="display:inline-block;margin-top:5px;font-size:11px;text-decoration:underline";
+          box.appendChild(original);
+          const actions=node("div","manager-region-actions");
+          const previewBtn=node("button","manager-action","Vorschau");previewBtn.type="button";
+          previewBtn.addEventListener("click",()=>{
+            try{previewDiscoveredMap(atlasEntry(item));status.textContent="Karte #"+item.id+" als Vorschau geöffnet (noch nicht gespeichert).";}
+            catch(e){status.textContent="Vorschau fehlgeschlagen: "+e.message;}
+          });
+          const presentInLibrary=maps.some(m=>m&&!m.hidden&&m.sourceUrl===item.url);
+          const addBtn=node("button","manager-action manager-primary",presentInLibrary?"Bereits übernommen":"Übernehmen");
+          addBtn.type="button";addBtn.disabled=presentInLibrary;
+          addBtn.addEventListener("click",async()=>{
+            addBtn.disabled=true;addBtn.textContent="Speichern …";
+            try{
+              await saveDiscoveredMap(atlasEntry(item));
+              addBtn.textContent="Übernommen";
+              status.textContent="„"+item.name+"“ in deiner Kartenbibliothek gespeichert.";
+            }catch(e){addBtn.disabled=false;addBtn.textContent="Übernehmen";status.textContent="Übernahme fehlgeschlagen: "+e.message;}
+          });
+          actions.append(previewBtn,addBtn);row.append(box,actions);results.appendChild(row);
+        }
+      }
+      async function fetchJson(url){
+        const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),12000);
+        try{
+          const response=await fetch(url,{signal:ctrl.signal,mode:"cors",credentials:"omit",headers:{Accept:"application/json"}});
+          if(!response.ok)throw Error("HTTP "+response.status);
+          return await response.json();
+        }finally{clearTimeout(timer);}
+      }
+      async function search(page){
+        const query=el("wmfWarperQuery").value.trim();
+        if(query.length<2){status.textContent="Bitte mindestens zwei Buchstaben eingeben.";return;}
+        const thisRequest=++serial;
+        currentPage=page;totalPages=null;updatePaging();results.replaceChildren();
+        status.textContent="Durchsuche Wikimedia MapWarper …";
+        try{
+          const params=new URLSearchParams({query:query,field:"title",show_warped:"1",per_page:"20",page:String(page)});
+          const data=await fetchJson(host+"/api/v1/maps.json?"+params.toString());
+          if(thisRequest!==serial)return;
+          if(!Array.isArray(data.data))throw Error("Das API-Ergebnis enthält keine Kartenliste.");
+          const found=data.data.map(record=>makeItem(record.id,record.attributes)).filter(Boolean);
+          const pages=Number(data.meta?.total_pages);
+          if(Number.isInteger(pages)&&pages>0)totalPages=pages;
+          present(found);
+          status.textContent=found.length+" georeferenzierte Karten auf Seite "+page+" gefunden."+(totalPages?" Insgesamt "+totalPages+" Seiten.":"");
+          updatePaging();
+          if(!found.length)status.textContent="Keine Karten gefunden. Anderen Suchbegriff versuchen.";
+        }catch(e){
+          if(thisRequest!==serial)return;
+          status.textContent="Die Live-Suche ist im Browser nicht erreichbar (möglicherweise CORS oder Serverstörung). Im Original browsen und die Karten-ID hier einfügen.";
+          const link=node("a","manager-action","Wikimedia-Suche öffnen ↗");
+          link.href=host+"/maps?field=title&query="+encodeURIComponent(query)+"&show_warped=1";
+          link.target="_blank";link.rel="noopener noreferrer";
+          results.replaceChildren(link);
+          totalPages=null;updatePaging();
+        }
+      }
+      async function loadId(){
+        const id=parseId(el("wmfWarperId").value);
+        if(!id){status.textContent="Bitte eine gültige ID oder https://warper.wmflabs.org/maps/2214 eingeben.";return;}
+        const thisRequest=++serial;totalPages=null;updatePaging();results.replaceChildren();
+        status.textContent="Karte #"+id+" abrufen …";
+        let item=null;
+        try{
+          const data=await fetchJson(host+"/api/v1/maps/"+id+".json");
+          if(String(data.data?.id)===id)item=makeItem(id,data.data.attributes);
+        }catch(_){}
+        if(thisRequest!==serial)return;
+        if(!item){
+          item=makeItem(id);
+          status.textContent="Metadaten nicht abrufbar. Die Kachelquelle kann trotzdem als Vorschau ausprobiert oder übernommen werden.";
+        }else status.textContent="Karte #"+id+" gefunden. Vorschau oder Übernehmen wählen.";
+        present([item]);
+      }
+      form.addEventListener("submit",e=>{e.preventDefault();void search(1);});
+      idForm.addEventListener("submit",e=>{e.preventDefault();void loadId();});
+      prev.addEventListener("click",()=>{if(currentPage>1)void search(currentPage-1);});
+      next.addEventListener("click",()=>{if(totalPages!==null&&currentPage<totalPages)void search(currentPage+1);});
+      panel.addEventListener("toggle",()=>{if(panel.open)syncRegions();});
+      present([makeItem("2214")]);
+      status.textContent="Karte #2214 bereit. Für weitere Karten oben suchen oder eine andere ID eingeben.";
+      updatePaging();
+    }());
     if (window.AtlasGeoportal) window.AtlasGeoportal.mount({
       parent:el("managerDiscover"),maps:maps,preview:previewDiscoveredMap
     });
